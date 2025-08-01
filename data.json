@@ -1,0 +1,94 @@
+{
+  "personalInfo": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "phone": "123-456-7890",
+    "location": "San Francisco, CA",
+    "portfolio": "https://johndoe.com",
+    "linkedin": "https://linkedin.com/in/johndoe",
+    "github": "https://github.com/johndoe"
+  },
+  "workExperiences": [
+    {
+      "title": "Senior Software Engineer",
+      "company": "Tech Corp",
+      "location": "Mountain View, CA",
+      "startDate": "Jan 2020",
+      "endDate": "Present",
+      "description": "Developed and maintained web applications."
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Innovate LLC",
+      "location": "Palo Alto, CA",
+      "startDate": "Jun 2017",
+      "endDate": "Dec 2019",
+      "description": "Worked on the front-end of the main product."
+    }
+  ],
+  "education": [
+    {
+      "school": "State University",
+      "degree": "Bachelor of Science",
+      "fieldOfStudy": "Computer Science",
+      "startDate": "2013",
+      "endDate": "2017"
+    }
+  ],
+  "skills": {
+    "JavaScript": "5",
+    "React.js": "5",
+    "Node.js": "5",
+    "HTML5": "5",
+    "CSS3": "5",
+    "SQL": "4",
+    "Python": "3",
+    "Java": "3",
+    "Angular": "2",
+    "Azure": "2",
+    "Cloud": "2"
+  },
+  "legal": {
+    "authorizedToWork": "Yes",
+    "requiresSponsorship": "No"
+  },
+  "jobPreferences": {
+    "jobTitle": "Software Engineer",
+    "jobType": "Full-time",
+    "salaryExpectation": "120000",
+    "currentSalary": "110000",
+    "noticePeriod": "30"
+  },
+  "documents": {
+    "resume": "path/to/your/resume.pdf",
+    "coverLetter": "path/to/your/cover_letter.pdf"
+  },
+  "behavioralQuestions": {
+    "strength": "Problem-solving and teamwork.",
+    "weakness": "Public speaking, but I'm actively working on it."
+  },
+  "availability": {
+    "startDate": "ASAP"
+  },
+  "extraAndOptional": {
+    "openToContract": true,
+    "lookingForInternship": true,
+    "wantsMentoring": true,
+    "openToRemoteWork": "Yes",
+    "willingToRelocate": "Yes",
+    "willingToTravel": "25%",
+    "driversLicense": "Yes",
+    "passportAvailability": "Yes",
+    "requireAccommodations": "No",
+    "unpaidInternshipComfort": "No",
+    "skillRatings": {
+      "Node.js": "8",
+      "React.js": "9",
+      "Java": "7",
+      "Python": "7",
+      "Angular": "6",
+      "Cloud": "7"
+    }
+  }
+}
