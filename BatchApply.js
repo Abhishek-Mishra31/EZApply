@@ -3,22 +3,20 @@
 
   console.log("LinkedIn Batch Apply Extension loaded. Version: 6.0 (Job Navigation Only)");
 
-  // Simple delay function
   function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // Configuration
   const config = {
-    delayBetweenJobs: 3000, // 3 seconds between job applications
-    maxRetries: 2, // Maximum number of retries for a single job
-    jobCardSelector: '.job-card-container', // Updated to match LinkedIn's job card container
-    jobTitleSelector: '.job-card-container__link', // Selector for job title links
-    jobDetailsPanel: '.jobs-search__right-rail', // The right panel that shows job details
-    jobDetailsContent: '.jobs-details__main-content', // Main content area of job details
+    delayBetweenJobs: 300, 
+    maxRetries: 2,
+    jobCardSelector: '.job-card-container, li.jobs-search-results__list-item, li.scaffold-layout__list-item, li[data-occludable-job-id]',
+    jobTitleSelector: '.job-card-container__link',
+    jobDetailsPanel: '.jobs-search__right-rail, .jobs-search__job-details--wrapper',
+    jobDetailsContent: '.jobs-details__main-content, .job-view-layout.jobs-details',
     easyApplyButtonSelector: [
-      '#jobs-apply-button-id', // Specific ID for the Easy Apply button
-      'button[data-job-id]', // Generic selector for job apply buttons
+      '#jobs-apply-button-id',
+      'button[data-job-id]',
       'button[aria-label*="Easy Apply"]',
       'button[data-easy-apply="true"]',
       '.jobs-apply-button--top-card button',
@@ -41,10 +39,8 @@
     ].join(',')
   };
 
-  // Prevent multiple instances
   window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
 
-  // State
   let currentJobIndex = 0;
   let successfulApplications = 0;
   let failedApplications = 0;
@@ -52,27 +48,46 @@
   let stopProcessing = false;
   let isProcessing = false;
 
-  // Simple logging function that also updates the console
+  function getStatusBanner() {
+    let banner = document.getElementById('batch-apply-status');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'batch-apply-status';
+      Object.assign(banner.style, {
+        position: 'fixed', bottom: '20px', right: '20px', zIndex: 2147483647,
+        padding: '8px 12px', background: '#0a66c2', color: 'white',
+        borderRadius: '4px', fontSize: '12px', fontFamily: 'sans-serif',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.3)', pointerEvents: 'none',
+      });
+      banner.textContent = 'LinkedIn Batch Apply: ready';
+      document.body.appendChild(banner);
+    }
+    return banner;
+  }
+
+  function updateBanner(text, error = false) {
+    const banner = getStatusBanner();
+    banner.style.background = error ? '#b3261e' : '#0a66c2';
+    banner.textContent = text;
+  }
+
   const log = (message, isError = false) => {
     const timestamp = new Date().toISOString().substr(11, 8);
     const logMessage = `[${timestamp}] ${message}`;
-    console.log(`%c${logMessage}`, isError ? "color: red" : "color: blue");
+    console.log(`%c${logMessage}`, isError ? 'color: red' : 'color: blue');
   };
 
-  // Wait for an element to appear on the page
   function waitForElement(selector, timeout = 10000) {
     return new Promise((resolve) => {
       log(`Waiting for element: ${selector}`);
       const startTime = Date.now();
       
-      // Check immediately
       const element = document.querySelector(selector);
       if (element) {
         log(`Found element: ${selector}`);
         return resolve(element);
       }
       
-      // Set up a mutation observer to watch for DOM changes
       const observer = new MutationObserver(() => {
         const element = document.querySelector(selector);
         if (element) {
@@ -86,13 +101,11 @@
         }
       });
       
-      // Start observing the document with the configured parameters
       observer.observe(document.body, {
         childList: true,
         subtree: true
       });
       
-      // Set a timeout as a fallback
       if (timeout) {
         setTimeout(() => {
           observer.disconnect();
@@ -105,25 +118,20 @@
     });
   }
 
-  // Find all job cards on the page
   function findJobCards() {
     const cards = Array.from(document.querySelectorAll(config.jobCardSelector));
     const validCards = [];
     
     for (const card of cards) {
-      // Skip if already applied (look for any applied indicators)
-      const isApplied = card.matches(config.appliedIndicator) || 
-                       card.querySelector(config.appliedIndicator);
-      
-      if (isApplied) {
+      const appliedFeedback = card.querySelector('.artdeco-inline-feedback__message');
+      const alreadyAppliedText = appliedFeedback?.textContent?.toLowerCase().includes('applied');
+      if (card.getAttribute('data-job-is-applied') === 'true' || alreadyAppliedText) {
         log('Skipping already applied job');
         continue;
       }
-      
-      // Find the clickable element within the job card (usually the title)
+
       const clickableElement = card.querySelector(config.jobTitleSelector) || card;
       
-      // Store both the card and its clickable element
       validCards.push({
         card: card,
         clickable: clickableElement,
@@ -135,7 +143,6 @@
     return validCards;
   }
 
-  // Scroll and click a job card to open it
   async function openJobCard(jobCard, index) {
     if (!jobCard || !document.body.contains(jobCard)) {
       log('Job card is no longer in the DOM');
@@ -145,11 +152,9 @@
     log(`Opening job card ${index + 1}...`);
     
     try {
-      // Scroll the job card into view
       jobCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await delay(1000);
+      await delay(300);
       
-      // Click the job card to open it
       jobCard.click();
       await delay(2000);
       
@@ -160,41 +165,47 @@
     }
   }
 
-  // Process a single job application by delegating to Content.js
   async function processJobApplication(jobData, index) {
     try {
       const { card, clickable, title } = jobData;
       log(`===== Processing job ${index + 1}: ${title} =====`);
       
-      // Scroll the job card into view
       log('Scrolling job card into view...');
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await delay(1000);
+      await delay(300);
       
-      // Click the job card to open the details in the right panel
       log('Clicking job card to open details...');
       clickable.click();
       
-      // Wait for the job details to load in the right panel
       log('Waiting for job details to load...');
       const jobDetails = await waitForElement(
         `${config.jobDetailsPanel} ${config.jobDetailsContent}`,
-        10000 // 10 second timeout
+        10000
       );
       
       if (!jobDetails) {
-        log('Job details did not load in the right panel', true);
-        return false;
+        log('Job details did not load in the expected selector; proceeding anyway.');
+      } else {
+        log('Waiting for job details to fully load...');
+        await delay(1500);
       }
       
-      // Wait a bit more for any lazy-loaded content
-      log('Waiting for job details to fully load...');
-      await delay(3000);
-      
-      // Let Content.js handle everything related to Easy Apply button and application
+      const alreadyApplied = document.querySelector('.artdeco-inline-feedback__message, [aria-label*="Applied"], .jobs-apply-button[disabled]');
+      if (alreadyApplied) {
+        log('Job is already applied according to details panel. Skipping...');
+        updateBanner('Already applied / skipped');
+        return false;
+      }
+
+      const easyApplyPresent = document.querySelector('#jobs-apply-button-id, .jobs-apply-button--top-card button, button.jobs-apply-button, button[aria-label*="Easy Apply"]');
+      if (!easyApplyPresent) {
+        log('Easy Apply button not present in details; skipping job.');
+        updateBanner('No Easy Apply button / skipped');
+        return false;
+      }
+
       log('Job details loaded, notifying Content.js to handle the application...');
       
-      // Send a message to Content.js to handle the application
       log('Sending message to Content.js to process job application...');
       
       const applicationComplete = await new Promise((resolve) => {
@@ -205,31 +216,20 @@
             messageHandled = true;
             chrome.runtime.onMessage.removeListener(handleMessage);
             log(`Content.js completed application with status: ${message.success ? 'success' : 'failure'}`);
+            if (message.success) {
+              updateBanner('Applied ✔');
+            } else {
+              updateBanner('Skipped');
+            }
             resolve(message.success);
           }
           return true;
         };
-        
-        // Set up message listener for Content.js response
+    
         chrome.runtime.onMessage.addListener(handleMessage);
         
-        // Send message to Content.js to start processing the job
         try {
-          chrome.runtime.sendMessage(
-            { action: 'processJobApplication' },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                log(`Chrome runtime error: ${chrome.runtime.lastError.message}`, true);
-                if (!messageHandled) {
-                  messageHandled = true;
-                  chrome.runtime.onMessage.removeListener(handleMessage);
-                  resolve(false);
-                }
-              } else {
-                log('Message sent to Content.js successfully');
-              }
-            }
-          );
+          chrome.runtime.sendMessage({ action: 'processJobApplication' });
         } catch (error) {
           log(`Error sending message to Content.js: ${error.message}`, true);
           if (!messageHandled) {
@@ -239,7 +239,6 @@
           }
         }
         
-        // Set a timeout in case Content.js doesn't respond
         setTimeout(() => {
           if (!messageHandled) {
             messageHandled = true;
@@ -247,7 +246,7 @@
             log('Timeout waiting for Content.js to complete application', true);
             resolve(false);
           }
-        }, 300000); // 5 minute timeout for the entire application process
+        }, 60000);
       });
       
       return applicationComplete;
@@ -257,16 +256,14 @@
       console.error('Job processing error:', error);
       return false;
     } finally {
-      // Ensure we close any open modals before moving to the next job
       await closeAllModals();
-      await delay(1000); // Brief pause between jobs
+      await delay(300);
     }
   }
 
   // Inject Content.js
   async function injectContentScript() {
     return new Promise((resolve) => {
-      // Check if Content.js is already injected
       if (document.querySelector('script[src*="Content.js"]')) {
         log('Content.js already injected');
         return resolve(true);
@@ -287,11 +284,9 @@
     });
   }
 
-  // Application submission is now handled by Content.js
-  // This function is kept for compatibility but will delegate to Content.js
   async function submitApplication() {
     log('Delegating application submission to Content.js...');
-    // Content.js will handle the entire submission process
+  
     return true;
   }
 
@@ -299,7 +294,6 @@
   async function closeAllModals() {
     log('Closing all modals...');
     
-    // Try different close buttons
     const closeButtons = [
       'button[aria-label="Dismiss"]',
       'button[aria-label="Close"]',
@@ -312,10 +306,10 @@
       const buttons = document.querySelectorAll(selector);
       for (const button of buttons) {
         try {
-          if (button.offsetParent !== null) { // Only click visible buttons
+          if (button.offsetParent !== null) {
             log(`Clicking close button: ${selector}`);
             button.click();
-            await delay(1000);
+            await delay(300);
           }
         } catch (e) {
           log(`Error clicking close button: ${e.message}`, true);
@@ -323,16 +317,58 @@
       }
     }
     
-    // Press Escape as a last resort
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, which: 27, bubbles: true }));
-    await delay(1000);
+    await delay(300);
   }
 
-  // Process all jobs one by one
+  async function applyIfEasyApplyVisible() {
+    const easyApplyBtn = document.querySelector(
+      [
+        '#jobs-apply-button-id',
+        '.jobs-apply-button--top-card button',
+        'button.jobs-apply-button',
+        'button[aria-label*="Easy Apply"]'
+      ].join(',')
+    );
+    if (easyApplyBtn) {
+      log('Easy Apply button already visible in right panel. Triggering Content.js immediately...');
+      const success = await new Promise((resolve) => {
+        let handled = false;
+        const listener = (msg) => {
+          if (msg.action === 'applicationComplete' && !handled) {
+            handled = true;
+            chrome.runtime.onMessage.removeListener(listener);
+            resolve(msg.success);
+          }
+        };
+        chrome.runtime.onMessage.addListener(listener);
+        chrome.runtime.sendMessage({ action: 'processJobApplication' });
+        setTimeout(() => {
+          if (!handled) {
+            chrome.runtime.onMessage.removeListener(listener);
+            resolve(false);
+          }
+        }, 300000);
+      });
+      if (success) {
+        log('Successfully applied to the currently open job panel.');
+      } else {
+        log('Failed to apply to the currently open job panel.', true);
+      }
+    }
+  }
+
   async function processAllJobs() {
+    if (isProcessing) {
+      log('Batch processing already in progress; ignoring duplicate call.');
+      return;
+    }
+    isProcessing = true;
+    log('Starting processAllJobs function');
+
+    await applyIfEasyApplyVisible();
     log('Starting processAllJobs function');
     
-    // Reset state at the start (isProcessing is already set by the caller)
     stopProcessing = false;
     successfulApplications = 0;
     failedApplications = 0;
@@ -340,17 +376,26 @@
 
     try {
       log('Finding job cards...');
+      updateBanner('Searching jobs…');
       const jobCards = findJobCards();
       log(`Found ${jobCards.length} job cards`);
       
       if (jobCards.length === 0) {
-        log('No job cards found on this page.');
-        return false;
+        log('No job cards found; attempting to scroll to load more...');
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        await delay(1200);
+        const refreshed = findJobCards();
+        if (refreshed.length === 0) {
+          log('Still no new job cards. Finishing.');
+          return false;
+        }
+        jobCards.push(...refreshed);
       }
       
       log(`Found ${jobCards.length} jobs. Starting batch process...`);
       
       for (let i = 0; i < jobCards.length; i++) {
+        updateBanner(`Applying (${i + 1}/${jobCards.length})`);
         if (stopProcessing) {
           log("Batch processing stopped by user");
           break;
@@ -360,40 +405,38 @@
         log(`Processing job ${i + 1} of ${jobCards.length}...`);
         
         try {
-          // Make sure we have a valid job card object with a clickable element
           if (!jobCard || !jobCard.clickable) {
-            log(`⚠️ Invalid job card at index ${i}`, true);
+            log(` Invalid job card at index ${i}`, true);
             failedApplications++;
             continue;
           }
           
-          // Process the job application (will handle scrolling and clicking)
           const success = await processJobApplication(jobCard, i);
           
           if (success) {
-            log(`✅ Successfully processed job ${i + 1} of ${jobCards.length}`);
+            log(` Successfully processed job ${i + 1} of ${jobCards.length}`);
             successfulApplications++;
           } else {
-            log(`⚠️ Could not process job ${i + 1} of ${jobCards.length} (may not have Easy Apply)`, true);
+            updateBanner('Already applied / skipped');
+            log(` Could not process job ${i + 1} of ${jobCards.length} (may not have Easy Apply)`, true);
             failedApplications++;
           }
         } catch (error) {
           failedApplications++;
-          log(`❌ Error processing job ${i + 1}: ${error.message}`, true);
+          log(` Error processing job ${i + 1}: ${error.message}`, true);
           console.error('Job processing error:', error);
         }
         
-        // Add delay between jobs if there are more to process
         if (i < jobCards.length - 1) {
           log(`Waiting ${config.delayBetweenJobs}ms before next job...`);
-          await delay(config.delayBetweenJobs);
+          updateBanner('Searching jobs…');
+           await delay(config.delayBetweenJobs);
         }
       }
 
       const completionMessage = `Batch processing completed. Success: ${successfulApplications}, Failed: ${failedApplications}`;
       log(completionMessage);
       
-      // Only show success alert if we had at least one successful application
       if (successfulApplications > 0) {
         alert(completionMessage);
       } else if (failedApplications > 0) {
@@ -406,7 +449,6 @@
       console.error('Batch processing error:', error);
       return false;
     } finally {
-      // Reset flags when done or on error
       log('Cleaning up batch process...');
       window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
       isProcessing = false;
@@ -414,7 +456,7 @@
       if (errorOccurred) {
         log('Batch processing stopped due to an error', true);
         log('Batch processing stopped due to an error', true);
-        throw errorOccurred; // Re-throw to ensure the caller knows about the error
+        throw errorOccurred;
       }
     }
   }
@@ -430,11 +472,9 @@
         return;
       }
       
-      // Reset running state on initialization
       window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
       isProcessing = false;
       
-      // Listen for messages from the popup
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "startBatchApply") {
           log(`Received startBatchApply message. Current processing state: ${isProcessing}`);
@@ -447,20 +487,16 @@
           }
           
           log("Starting batch process from popup...");
-          isProcessing = true;
           window.__LINKEDIN_AUTO_APPLY_RUNNING = true;
           
-          // Start the batch process in a way that won't block the message channel
           const startProcess = async () => {
             try {
               log('=== STARTING BATCH PROCESS ===');
               
-              // Content.js is already loaded via manifest.json, just wait for it to initialize
               log('Waiting for Content.js to initialize...');
               await delay(3000);
               
               log('About to call processAllJobs...');
-              // Start processing jobs
               await processAllJobs();
               
               log('=== BATCH PROCESS COMPLETED ===');
@@ -481,14 +517,11 @@
             }
           };
           
-          // Start the process without awaiting it to keep the message channel open
           startProcess();
           
-          // Return true to indicate we'll send a response asynchronously
           return true;
         }
         
-        // Add a stop command to handle any cleanup if needed
         if (request.action === "stopBatchApply") {
           log("Stopping batch process...");
           stopProcessing = true;
@@ -506,11 +539,9 @@
     }
   }
 
-  // Start the extension when the page is fully loaded
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
-    // DOMContentLoaded has already fired, initialize immediately
     init();
   }
 })();

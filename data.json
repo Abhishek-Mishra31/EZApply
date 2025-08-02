@@ -16,6 +16,7 @@
     "fullTimeAvailable": "Yes",
     "usedCursorBefore": "No"
   },
+
   "workExperiences": [
     {
       "title": "Senior Software Engineer",
@@ -81,7 +82,8 @@
     "hybridWork": "Yes",
     "commuteToLocation": "Yes",
     "servingNoticePeriod": "No",
-    "immediateJoiner": "No",
+    "immediateJoiner": "Yes",
+    "currentlyWorking": "Yes",
     "totalITExperience": "8"
   },
   "documents": {

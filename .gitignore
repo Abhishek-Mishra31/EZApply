@@ -1,5 +1,4 @@
-# /data.json
-# /manifest.json
-# /node_modules
-# /.gitignore
-# /.env
+/manifest.json
+/node_modules
+/.gitignore
+/.env
