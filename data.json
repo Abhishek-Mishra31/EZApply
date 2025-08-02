@@ -2,12 +2,19 @@
   "personalInfo": {
     "firstName": "John",
     "lastName": "Doe",
-    "email": "john.doe@example.com",
-    "phone": "123-456-7890",
-    "location": "San Francisco, CA",
+    "email": "johndoe@gmail.com",
+    "phone": "123-456-789",
+    "addressLine1": "123 Main St",
+    "city": "San Francisco",
+    "state": "California",
+    "zipCode": "94105",
+    "country": "United States",
+    "location": "San Francisco, California, United States",
     "portfolio": "https://johndoe.com",
     "linkedin": "https://linkedin.com/in/johndoe",
-    "github": "https://github.com/johndoe"
+    "github": "https://github.com/johndoe",
+    "fullTimeAvailable": "Yes",
+    "usedCursorBefore": "No"
   },
   "workExperiences": [
     {
@@ -33,18 +40,30 @@
       "degree": "Bachelor of Science",
       "fieldOfStudy": "Computer Science",
       "startDate": "2013",
-      "endDate": "2017"
+      "endDate": "2017",
+      "completed": "Yes"
     }
   ],
+  "educationQuestions": {
+    "bachelorsDegree": "Yes",
+    "mastersDegree": "No",
+    "phdDegree": "No"
+  },
   "skills": {
     "JavaScript": "5",
     "React.js": "5",
     "Node.js": "5",
     "HTML5": "5",
     "CSS3": "5",
+    "Git": "5",
+    "RESTful APIs": "5",
     "SQL": "4",
     "Python": "3",
-    "Java": "3",
+    "Java": "8",
+    "Spring Boot": "8",
+    "Microservices": "8",
+    "C++": "4",
+    "Agile/Scrum": "4",
     "Angular": "2",
     "Azure": "2",
     "Cloud": "2"
@@ -58,7 +77,12 @@
     "jobType": "Full-time",
     "salaryExpectation": "120000",
     "currentSalary": "110000",
-    "noticePeriod": "30"
+    "noticePeriod": "30",
+    "hybridWork": "Yes",
+    "commuteToLocation": "Yes",
+    "servingNoticePeriod": "No",
+    "immediateJoiner": "No",
+    "totalITExperience": "8"
   },
   "documents": {
     "resume": "path/to/your/resume.pdf",
@@ -76,8 +100,22 @@
     "lookingForInternship": true,
     "wantsMentoring": true,
     "openToRemoteWork": "Yes",
-    "willingToRelocate": "Yes",
-    "willingToTravel": "25%",
+    "additionalInfo": {
+      "willingToRelocate": "Yes",
+      "sponsorshipRequired": "No"
+    },
+    "technologyCompatibility": {
+      "React": "Yes",
+      "Node.js": "Yes",
+      "TypeScript": "Yes",
+      "Angular": "No",
+      "Vue.js": "No",
+      "Python": "Yes",
+      "Docker": "Yes",
+      "AWS": "Yes",
+      "MongoDB": "Yes",
+      "SQL": "Yes"
+    },
     "driversLicense": "Yes",
     "passportAvailability": "Yes",
     "requireAccommodations": "No",
