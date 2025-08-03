@@ -9,129 +9,283 @@
 
   async function simulateUserInput(element, value) {
     log(`Simulating input for ${element.tagName} with value "${value}"`);
+    
+    // Get the container element to check for question context
+    const container = element.closest('.fb-dash-form-element') || 
+                     element.closest('.artdeco-text-input') || 
+                     element.closest('.artdeco-form-element') ||
+                     document;
+    
+    const questionText = container.textContent.trim().toLowerCase();
+    const errorElement = container.nextElementSibling?.querySelector('.artdeco-inline-feedback--error');
+    const errorMessage = errorElement?.textContent?.trim().toLowerCase() || '';
+    
     element.focus();
+
+    // Check if this is a numeric input field
+    const isNumericInput = element.type === 'number' || 
+                          element.getAttribute('type') === 'number' ||
+                          element.id?.includes('numeric') ||
+                          errorMessage.includes('enter a whole number') ||
+                          errorMessage.includes('enter a decimal number') ||
+                          questionText.includes('years of experience') ||
+                          questionText.includes('notice period') ||
+                          questionText.includes('ctc') ||
+                          questionText.includes('salary');
+
+    if (isNumericInput) {
+      let numericValue = value || '3'; // Default value
+      
+      // Determine if we need an integer or decimal
+      const requiresInteger = errorMessage.includes('whole number') || 
+                            questionText.includes('years of experience') ||
+                            questionText.includes('notice period in days');
+      
+      const requiresDecimal = errorMessage.includes('decimal number') ||
+                            questionText.includes('ctc') ||
+                            questionText.includes('salary') ||
+                            questionText.includes('expected compensation');
+
+      // Process the numeric value
+      if (requiresInteger) {
+        // For years of experience or notice period in days
+        const intValue = Math.min(99, Math.max(0, parseInt(numericValue, 10) || 3));
+        numericValue = intValue.toString();
+        log(`Setting integer value (0-99): ${numericValue}`);
+      } 
+      else if (requiresDecimal) {
+        // For CTC, salary, or other decimal fields
+        const floatValue = Math.max(0.1, parseFloat(numericValue) || 3.0);
+        numericValue = floatValue.toFixed(1); // Format to 1 decimal place
+        log(`Setting decimal value: ${numericValue}`);
+      }
+      
+      // Special handling for specific fields
+      if (questionText.includes('notice period')) {
+        // For notice period, use a reasonable default (30 days)
+        numericValue = '30';
+      } 
+      else if (questionText.includes('ctc') || questionText.includes('expected compensation')) {
+        // For CTC fields, use the provided value or a reasonable default
+        numericValue = value ? value.toString() : '500000';
+      }
+      
+      // Set the value and trigger events
+      element.value = numericValue;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('blur', { bubbles: true }));
+      
+      await delay(300);
+      return;
+    }
 
     if (element.tagName === "SELECT") {
       let option = null;
       const valueStr = String(value).toLowerCase();
-
-      // First try exact match
-      option = Array.from(element.options).find((opt) =>
-        opt.textContent.trim().toLowerCase().includes(valueStr)
+      const options = Array.from(element.options);
+      
+      // Check for Yes/No questions first
+      const isYesNoQuestion = questionText.includes('are you') || 
+                            questionText.includes('do you') ||
+                            questionText.includes('have you') ||
+                            questionText.includes('is this') ||
+                            questionText.includes('okay for');
+      
+      // Special handling for contract and hourly rate questions
+      const isContractQuestion = questionText.includes('contract') || 
+                               questionText.includes('6 months') || 
+                               questionText.includes('temporary');
+      const isHourlyRateQuestion = questionText.includes('hourly rate') || 
+                                 questionText.includes('$10');
+      
+      // Try exact match first
+      option = options.find(opt => 
+        opt.textContent.trim().toLowerCase() === valueStr ||
+        opt.value.toLowerCase() === valueStr
       );
-
-      // If no match and it's a number (likely notice period), try different formats
-      if (!option && !isNaN(value)) {
-        const numValue = parseInt(value);
-
-        // Try common notice period formats
-        const patterns = [
-          `${numValue} days`,
-          `${numValue} day`,
-          `${numValue}-day`,
-          `${numValue}days`,
-          numValue === 30 ? "1 month" : null,
-          numValue === 60 ? "2 months" : null,
-          numValue === 90 ? "3 months" : null,
-          numValue === 0 ? "immediate" : null,
-          numValue === 0 ? "immediately" : null,
-          numValue <= 7 ? "within a week" : null,
-          numValue <= 7 ? "1 week" : null,
-        ].filter(Boolean);
-
-        for (const pattern of patterns) {
-          option = Array.from(element.options).find((opt) =>
-            opt.textContent.trim().toLowerCase().includes(pattern.toLowerCase())
-          );
-          if (option) {
-            log(`Found option using pattern "${pattern}" for value "${value}"`);
-            break;
-          }
+      
+      // If no exact match, try partial match
+      if (!option) {
+        option = options.find(opt => 
+          opt.textContent.trim().toLowerCase().includes(valueStr) ||
+          (opt.value && opt.value.toLowerCase().includes(valueStr))
+        );
+      }
+      
+      // Special handling for contract questions (default to Yes)
+      if (!option && isContractQuestion) {
+        log('Contract question detected, defaulting to Yes');
+        option = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === 'yes' ||
+          opt.value.toLowerCase() === 'yes' ||
+          opt.textContent.trim().toLowerCase().startsWith('yes')
+        ) || options[1]; // Fallback to first non-default option
+      }
+      
+      // Special handling for hourly rate questions (default to Yes if acceptable)
+      if (!option && isHourlyRateQuestion) {
+        log('Hourly rate question detected, defaulting to Yes');
+        option = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === 'yes' ||
+          opt.value.toLowerCase() === 'yes' ||
+          opt.textContent.trim().toLowerCase().startsWith('yes')
+        ) || options[1]; // Fallback to first non-default option
+        
+        if (!option && options.length > 0) {
+          // If we still don't have an option, try to find any option that might be a positive response
+          option = options.find(opt => 
+            !opt.textContent.trim().toLowerCase().includes('no') && 
+            !opt.value.toLowerCase().includes('no')
+          ) || options[options.length - 1]; // Fallback to last option
         }
+      }
+      
+      // If still no match and it's a Yes/No question, try to find Yes/No options
+      if (!option && isYesNoQuestion) {
+        const yesOption = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === 'yes' ||
+          opt.value.toLowerCase() === 'yes'
+        );
+        
+        const noOption = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === 'no' ||
+          opt.value.toLowerCase() === 'no'
+        );
+        
+        // Default to Yes for most questions, unless it's a negative question
+        const isNegativeQuestion = questionText.includes('not') || 
+                                 questionText.includes('disability') ||
+                                 questionText.includes('criminal');
+        
+        option = isNegativeQuestion ? noOption || yesOption : yesOption || noOption;
       }
 
       if (option) {
-        log(
-          `Found option for "${value}": "${option.textContent.trim()}". Applying selection.`
-        );
+        log(`Found option for "${value}": "${option.textContent.trim()}". Applying selection.`);
         await delay(Math.random() * 300 + 200);
-        element.selectedIndex = option.index;
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLSelectElement.prototype,
-          "value"
-        ).set;
-        nativeInputValueSetter.call(element, option.value);
-        element.dispatchEvent(new Event("input", { bubbles: true }));
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-        await delay(Math.random() * 700 + 500);
-        element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-        element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      } else {
-        const availableOptions = Array.from(element.options)
-          .map((opt) => opt.textContent.trim())
-          .join('", "');
-        log(
-          `Could not find an option for "${value}". Available options: "${availableOptions}"`
-        );
-      }
-    } else {
-      const prototype = Object.getPrototypeOf(element);
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        prototype,
-        "value"
-      ).set;
-      async function simulateInput(element, value) {
-        // Add random delay to simulate human typing
+        
+        // Set the value directly first
+        element.value = option.value;
+        
+        // Then dispatch events to ensure React picks up the change
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('click', { bubbles: true }));
+        
+        // Also try setting the selected property directly
+        option.selected = true;
+        
+        // Additional events to ensure the UI updates
+        await delay(200);
+        element.focus();
+        element.dispatchEvent(new Event('focus', { bubbles: true }));
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
+        
         await delay(Math.random() * 500 + 300);
-
+      } else {
+        const availableOptions = options
+          .map(opt => `"${opt.textContent.trim()}" (value: ${opt.value})`)
+          .join(', ');
+        log(`Could not find an option for "${value}". Available options: ${availableOptions}`);
+        
+        // As a fallback, try to select the first non-default option
+        if (options.length > 1) {
+          const nonDefaultOption = options[1]; // Usually the first non-default option
+          log(`Falling back to option: "${nonDefaultOption.textContent.trim()}"`);
+          element.value = nonDefaultOption.value;
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          nonDefaultOption.selected = true;
+        }
+      }
+    } 
+    // Handle text/number inputs
+    else {
+      const isNumericInput = element.type === 'number' || 
+                           (element.type === 'text' && 
+                            (element.getAttribute('inputmode') === 'numeric' ||
+                             /\d+\s*(year|yr|yrs|month|mo|mos|day|dy|dys)/i.test(questionText)));
+      
+      // Special handling for experience questions that expect a decimal number
+      const isExperienceQuestion = questionText.includes('exp') || 
+                                 questionText.includes('experience') ||
+                                 questionText.includes('year of experience');
+      
+      let finalValue = value;
+      
+      // Format numeric inputs properly
+      if (isNumericInput) {
+        // For experience questions, ensure we have a decimal if needed
+        if (isExperienceQuestion) {
+          // If value is a whole number or invalid, add .0 to make it a decimal
+          if ((String(value).indexOf('.') === -1 || isNaN(value)) && value !== '') {
+            const numValue = parseFloat(value) || 3.0; // Default to 3.0 if invalid
+            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
+            log(`Formatted experience value to decimal: ${finalValue}`);
+          } else {
+            // Ensure it's a valid decimal between 0.1 and 50.0
+            const numValue = parseFloat(value);
+            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
+          }
+        }
+        
+        // Ensure the value is within the expected range
+        const numValue = parseFloat(finalValue);
+        if (!isNaN(numValue)) {
+          // For years of experience, cap at a reasonable number
+          if (isExperienceQuestion) {
+            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
+            log(`Normalized experience value to: ${finalValue}`);
+          } 
+          // For other numeric inputs, ensure they're positive
+          else if (numValue < 0) {
+            finalValue = '0';
+          }
+        } else if (isExperienceQuestion) {
+          // Default value if all else fails
+          finalValue = '3.0';
+        }
+      }
+      
+      // Simulate typing for text inputs
+      if (element.type === 'text' || element.type === 'number' || element.tagName === 'TEXTAREA') {
+        await delay(Math.random() * 300 + 200);
         element.focus();
         await delay(100);
-
-        // Simulate gradual typing for text inputs
-        if (element.type === "text" || element.type === "number") {
-          let finalValue = value;
-          if (element.type === "number" && element.hasAttribute("required")) {
-            const numValue = parseInt(value, 10);
-            if (!isNaN(numValue) && numValue >= 0 && numValue <= 99) {
-              finalValue = numValue.toString();
-            } else {
-              finalValue = "0";
-            }
-            log(`Normalized numeric value from "${value}" to "${finalValue}"`);
-          }
-
-          element.value = "";
-          element.dispatchEvent(new Event("input", { bubbles: true }));
+        
+        // Clear the field first
+        element.value = '';
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // Type the value character by character for text inputs
+        if (element.type === 'text' || element.tagName === 'TEXTAREA') {
           for (let i = 0; i < finalValue.length; i++) {
             element.value += finalValue[i];
-            element.dispatchEvent(new Event("input", { bubbles: true }));
-            await delay(Math.random() * 100 + 50);
-          }
-          // Ensure React-controlled input picks up the final value
-          const prototypeSetter = Object.getOwnPropertyDescriptor(
-            Object.getPrototypeOf(element),
-            "value"
-          )?.set;
-          if (prototypeSetter) {
-            prototypeSetter.call(element, finalValue);
-            element.dispatchEvent(new Event("input", { bubbles: true }));
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            await delay(Math.random() * 50 + 30);
           }
         } else {
-          element.value = value;
-          element.dispatchEvent(new Event("input", { bubbles: true }));
+          // For number inputs, set the value directly
+          element.value = finalValue;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
         }
-
-        await delay(100);
-        element.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        // Trigger change and blur events
+        element.dispatchEvent(new Event('change', { bubbles: true }));
         await delay(200);
         element.blur();
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
         await delay(300);
+      } else {
+        // For other input types, just set the value directly
+        element.value = finalValue;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
       }
-      await simulateInput(element, value);
     }
-
-    await delay(100);
+    
+    // Add a small delay before moving to the next field
+    await delay(Math.random() * 200 + 100);
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -406,6 +560,17 @@
     "expected compensation": "jobPreferences.expectedCTC",
     "current salary": "jobPreferences.currentSalary",
     "current ctc": "jobPreferences.currentSalary",
+    "current annual compensation": "jobPreferences.currentSalary",
+    "current ctc in inr": "jobPreferences.currentSalary",
+    "current annual compensation in inr": "jobPreferences.currentSalary",
+    "expected salary": "jobPreferences.expectedCTC",
+    "expected ctc": "jobPreferences.expectedCTC",
+    "expected annual compensation": "jobPreferences.expectedCTC",
+    "expected ctc in inr": "jobPreferences.expectedCTC",
+    "expected annual compensation in inr": "jobPreferences.expectedCTC",
+    "total years of professional experience": "jobPreferences.totalITExperience",
+    "total additional months of experience": "jobPreferences.totalMonthsExperience",
+    "current ctc": "jobPreferences.currentSalary",
     remote: "extraAndOptional.openToRemoteWork",
     bachelor: "educationAndInternships.hasBachelorsDegree",
     degree: "educationAndInternships.hasBachelorsDegree",
@@ -434,6 +599,9 @@
     "immediate to 1 week joiner": "jobPreferences.immediateJoiner",
     "how soon": "jobPreferences.noticePeriod",
     "how soon can you join": "jobPreferences.noticePeriod",
+    "resigned": "jobPreferences.resigned",
+    "last working date": "jobPreferences.lastWorkingDateConfirmed",
+    "start within 5 days": "jobPreferences.immediateJoiner",
     "1 week joiner": "jobPreferences.immediateJoiner",
     "hybrid setting": "jobPreferences.hybridWork",
     "hybrid work": "jobPreferences.hybridWork",
@@ -444,6 +612,32 @@
     "commute to location": "jobPreferences.commuteToLocation",
     "commuting to job's location": "jobPreferences.commuteToLocation",
     "comfortable commuting": "jobPreferences.commuteToLocation",
+    
+    "c#": "jobPreferences.skillRatings.C#",
+    "next.js": "jobPreferences.skillRatings.Next.js",
+
+    "docker": "jobPreferences.technologies.docker",
+    "kubernetes": "jobPreferences.technologies.kubernetes",
+    "container": "jobPreferences.technologies.docker",
+    "containerization": "jobPreferences.technologies.docker",
+    "orchestration": "jobPreferences.technologies.kubernetes",
+    "aws": "jobPreferences.technologies.aws",
+    "cloud": "jobPreferences.technologies.aws",
+    "frontend": "jobPreferences.technologies.react",
+    "redux": "jobPreferences.technologies.redux",
+    "toolkit": "jobPreferences.technologies.redux",
+    "tailwind": "jobPreferences.technologies.tailwind",
+    "figma": "jobPreferences.technologies.figma",
+    "figma handoff": "jobPreferences.technologies.figma",
+    "postgresql": "jobPreferences.technologies.postgresql",
+    "redis": "jobPreferences.technologies.redis",
+    "vercel": "jobPreferences.technologies.vercel",
+    "git": "jobPreferences.technologies.git",
+    "cicd": "jobPreferences.technologies.cicd",
+    "react": "jobPreferences.technologies.react",
+    "node": "jobPreferences.technologies.node",
+    "python": "jobPreferences.technologies.python",
+    "java": "jobPreferences.technologies.java",
     commuting: "jobPreferences.commuteToLocation",
     "bachelor's degree": "educationQuestions.bachelorsDegree",
     "bachelor degree": "educationQuestions.bachelorsDegree",
@@ -595,13 +789,26 @@
       if (!questionText) {
         const label = questionContainer.querySelector("label");
         if (label) {
-          const questionSpan = label.querySelector('span[aria-hidden="true"]');
-          questionText = (
-            questionSpan ? questionSpan.innerText : label.innerText
-          )
-            .trim()
-            .toLowerCase();
+          // First try to find the question text in a span with specific class
+          let questionSpan = label.querySelector('span[aria-hidden="true"]') || 
+                           label.querySelector('.fb-dash-form-element__label-title') ||
+                           label;
+          
+          questionText = questionSpan.innerText.trim().toLowerCase();
+          
+          // If we still don't have text, try to find any visible text in the container
+          if (!questionText) {
+            questionText = questionContainer.innerText.trim().toLowerCase();
+          }
         }
+      }
+      
+      // Clean up the question text
+      if (questionText) {
+        questionText = questionText
+          .replace(/\s+/g, ' ') // Replace multiple spaces with one
+          .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+          .trim();
       }
 
       if (!questionText) continue;
@@ -625,12 +832,27 @@
 
       if (!dataPath) continue;
 
-      if (dataPath === "workExperiences") {
+      if (dataPath === "workExperiences" || 
+          (questionText.includes('exp') && 
+           (questionText.includes('java') || 
+            questionText.includes('angular') || 
+            questionText.includes('javascript')))) {
+            
         // Check if this is a Yes/No experience question vs numeric years question
         const isYesNoQuestion =
           questionText.includes("do you have experience") ||
           questionText.includes("have you worked") ||
-          questionText.includes("have experience in");
+          questionText.includes("have experience in") ||
+          questionText.includes("is it described");
+          
+        // If it's a technology experience question, make sure we return a numeric value
+        if (!isYesNoQuestion && 
+            (questionText.includes('java') || 
+             questionText.includes('angular') || 
+             questionText.includes('javascript'))) {
+          answer = '3.0'; // Default to 3 years experience
+          log(`Setting default experience for technology question: ${answer}`);
+        }
 
         // Check if dropdown has Yes/No options
         const selectElement = questionContainer.querySelector("select");
@@ -871,11 +1093,28 @@
                 .toLowerCase();
             }
 
-            const answerText = String(answer).toLowerCase();
-            log(
-              `Comparing radio option "${labelText}" with answer "${answerText}"`
-            );
-            return labelText.toLowerCase() === answerText.toLowerCase();
+            // Normalize the answer text
+            const answerText = String(answer).trim().toLowerCase();
+            
+            // Special handling for Yes/No answers
+            if ((answerText === 'yes' || answerText === 'no') && labelText) {
+              // Check for variations of Yes/No (y/n, yeah/nope, etc.)
+              const normalizedLabel = labelText.replace(/[^a-z]/g, '');
+              if (answerText === 'yes' && (normalizedLabel.startsWith('y') || normalizedLabel === 'yeah' || normalizedLabel === 'yep')) {
+                log(`Matched "${labelText}" as "Yes"`);
+                return true;
+              }
+              if (answerText === 'no' && (normalizedLabel.startsWith('n') || normalizedLabel === 'nope' || normalizedLabel === 'nah')) {
+                log(`Matched "${labelText}" as "No"`);
+                return true;
+              }
+            }
+            
+            // Check for direct match (case-insensitive)
+            const isMatch = labelText.toLowerCase() === answerText.toLowerCase();
+            log(`Comparing radio option "${labelText}" with answer "${answerText}": ${isMatch ? 'MATCH' : 'no match'}`);
+            
+            return isMatch;
           });
 
           if (radioToSelect && !radioToSelect.checked) {

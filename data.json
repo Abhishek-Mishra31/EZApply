@@ -77,6 +77,7 @@
     "jobTitle": "Software Engineer",
     "jobType": "Full-time",
     "salaryExpectation": "120000",
+    "expectedCTC": "1500000",
     "currentSalary": "110000",
     "noticePeriod": "30",
     "hybridWork": "Yes",
@@ -84,7 +85,33 @@
     "servingNoticePeriod": "No",
     "immediateJoiner": "Yes",
     "currentlyWorking": "Yes",
-    "totalITExperience": "8"
+    "resigned": "No",
+    "lastWorkingDateConfirmed": "No",
+    "totalITExperience": "8",
+    "totalMonthsExperience": "0",
+    "skillRatings": {
+      "C#": "5",
+      "Next.js": "5"
+    },
+    "technologies": {
+      "docker": "Yes",
+      "kubernetes": "Yes",
+      "aws": "Yes",
+      "react": "Yes",
+      "node": "Yes",
+      "python": "Yes",
+      "java": "Yes",
+      "redux": "Yes",
+      "tailwind": "Yes",
+      "figma": "Yes",
+      "postgresql": "Yes",
+      "redis": "Yes",
+      "vercel": "Yes",
+      "git": "Yes",
+      "cicd": "Yes",
+      "frontend": "Yes",
+      "toolkit": "Yes"
+    }
   },
   "documents": {
     "resume": "path/to/your/resume.pdf",

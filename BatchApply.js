@@ -1,7 +1,12 @@
 (function () {
   "use strict";
 
-  console.log("LinkedIn Batch Apply Extension loaded. Version: 6.0 (Job Navigation Only)");
+  console.log("LinkedIn Batch Apply Extension loaded. Version: 7.0 (Job Limit & Multi-page)");
+  
+  // Maximum number of jobs to apply to in total
+  const MAX_JOBS = 20;
+  let totalApplications = 0;
+  let currentPage = 1;
 
   function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -54,21 +59,55 @@
       banner = document.createElement('div');
       banner.id = 'batch-apply-status';
       Object.assign(banner.style, {
-        position: 'fixed', bottom: '20px', right: '20px', zIndex: 2147483647,
-        padding: '8px 12px', background: '#0a66c2', color: 'white',
-        borderRadius: '4px', fontSize: '12px', fontFamily: 'sans-serif',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.3)', pointerEvents: 'none',
+        position: 'fixed', 
+        bottom: '20px', 
+        right: '20px', 
+        zIndex: '2147483647',
+        padding: '10px 15px', 
+        background: '#0a66c2', 
+        color: 'white',
+        borderRadius: '4px', 
+        fontSize: '14px', 
+        fontWeight: '500',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.3)', 
+        pointerEvents: 'none',
+        opacity: '0.95',
+        transition: 'all 0.3s ease',
+        maxWidth: '300px',
+        textAlign: 'center',
+        lineHeight: '1.4'
       });
-      banner.textContent = 'LinkedIn Batch Apply: ready';
+      
+      if (window.getComputedStyle(document.body).position === 'static') {
+        document.body.style.position = 'relative';
+      }
+      
       document.body.appendChild(banner);
+      
+      setTimeout(() => {
+        banner.style.opacity = '1';
+      }, 100);
     }
     return banner;
   }
 
-  function updateBanner(text, error = false) {
+  function updateBanner(text, error = false, showCount = false) {
     const banner = getStatusBanner();
+    
+    banner.style.display = 'block';
+    banner.style.opacity = '0.95';
     banner.style.background = error ? '#b3261e' : '#0a66c2';
-    banner.textContent = text;
+    
+    let statusText = `✅ Applied: ${successfulApplications}/20\n📄 Page: ${currentPage}`;
+    
+    // Add the status text if provided
+    if (text && text !== 'Applying to jobs') {
+      statusText = `🔄 ${text}\n${statusText}`;
+    }
+    
+    banner.textContent = statusText;
+    banner.style.zIndex = '2147483647';
   }
 
   const log = (message, isError = false) => {
@@ -208,6 +247,7 @@
       
       log('Sending message to Content.js to process job application...');
       
+      // Wait for Content.js to complete the application
       const applicationComplete = await new Promise((resolve) => {
         let messageHandled = false;
         
@@ -215,13 +255,18 @@
           if (message.action === 'applicationComplete' && !messageHandled) {
             messageHandled = true;
             chrome.runtime.onMessage.removeListener(handleMessage);
-            log(`Content.js completed application with status: ${message.success ? 'success' : 'failure'}`);
-            if (message.success) {
-              updateBanner('Applied ✔');
+            
+            const success = message.success === true;
+            log(`Content.js completed application with status: ${success ? 'success' : 'failure'}`);
+            
+            if (success) {
+              appliedCount++;
+              updateBanner(`Applied ${appliedCount}/${totalJobs} ✔`);
+              resolve(true);
             } else {
-              updateBanner('Skipped');
+              updateBanner(`Applied ${appliedCount}/${totalJobs} - Skipped`);
+              resolve(false);
             }
-            resolve(message.success);
           }
           return true;
         };
@@ -243,10 +288,10 @@
           if (!messageHandled) {
             messageHandled = true;
             chrome.runtime.onMessage.removeListener(handleMessage);
-            log('Timeout waiting for Content.js to complete application', true);
+            log('Timeout waiting for Content.js response');
             resolve(false);
           }
-        }, 60000);
+        }, 30000);
       });
       
       return applicationComplete;
@@ -358,20 +403,70 @@
     }
   }
 
-  async function processAllJobs() {
+  async function goToNextPage() {
+    try {
+      log('Attempting to navigate to next page...');
+      currentPage++;
+      // Try multiple selectors for the Next button
+      const nextButtonSelectors = [
+        'button[aria-label="View next page"]', // Main selector from the HTML
+        'button.jobs-search-pagination__button--next', // Next button class
+        'button[aria-label^="Next"]', // Fallback for other LinkedIn versions
+        'button[aria-label^="next" i]' // Case-insensitive fallback
+      ];
+      
+      for (const selector of nextButtonSelectors) {
+        const nextButton = document.querySelector(selector);
+        if (nextButton && !nextButton.disabled) {
+          log(`Found next page button with selector: ${selector}`);
+          updateBanner(`Moving to page ${currentPage}...`, false, true);
+          nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await delay(1000); // Slightly longer delay for better reliability
+          nextButton.click();
+          await delay(4000); // Wait for page to load
+          return true;
+        }
+      }
+      
+      log('No enabled next page button found', true);
+      return false;
+    } catch (error) {
+      log(`Error navigating to next page: ${error.message}`, true);
+      return false;
+    }
+  }
+
+  async function processAllJobs(pageNumber = 1) {
+    // Limit to 3 pages max
+    const MAX_PAGES = 3;
+    
     if (isProcessing) {
       log('Batch processing already in progress; ignoring duplicate call.');
       return;
     }
+    
+    if (totalApplications >= MAX_JOBS) {
+      log(`Reached maximum job application limit of ${MAX_JOBS}. Stopping.`);
+      updateBanner(`Reached ${MAX_JOBS} job limit`);
+      return;
+    }
+    
+    if (pageNumber > MAX_PAGES) {
+      log(`Reached maximum page limit of ${MAX_PAGES}. Stopping.`);
+      updateBanner(`Completed ${MAX_PAGES} pages`);
+      return;
+    }
+    
     isProcessing = true;
-    log('Starting processAllJobs function');
-
-    await applyIfEasyApplyVisible();
-    log('Starting processAllJobs function');
+    log(`Starting processAllJobs function - Page ${pageNumber}/${MAX_PAGES}`);
+    updateBanner(`Page ${pageNumber}/${MAX_PAGES} - Finding jobs...`);
+    
+    // Scroll to load job cards
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await delay(1500);
     
     stopProcessing = false;
-    successfulApplications = 0;
-    failedApplications = 0;
+    let jobsProcessedOnPage = 0;
     let errorOccurred = null;
 
     try {
@@ -392,57 +487,135 @@
         jobCards.push(...refreshed);
       }
       
-      log(`Found ${jobCards.length} jobs. Starting batch process...`);
+      const remainingJobs = 20 - totalApplications;
+      const jobsToProcess = Math.min(jobCards.length, remainingJobs);
       
-      for (let i = 0; i < jobCards.length; i++) {
-        updateBanner(`Applying (${i + 1}/${jobCards.length})`);
-        if (stopProcessing) {
-          log("Batch processing stopped by user");
-          break;
-        }
-
-        const jobCard = jobCards[i];
-        log(`Processing job ${i + 1} of ${jobCards.length}...`);
-        
-        try {
-          if (!jobCard || !jobCard.clickable) {
-            log(` Invalid job card at index ${i}`, true);
+      log(`Found ${jobCards.length} jobs. Processing ${jobsToProcess} jobs (${totalApplications}/20 applied so far)...`);
+      updateBanner(`Page ${pageNumber}/${MAX_PAGES} - Starting...`);
+      
+      // Decide how many job cards we will ATTEMPT on this page (includes skips)
+      const jobsBeforePageChange = 3 + Math.floor(Math.random() * 2); // 3-4 jobs
+      let currentIndex = 0;
+      let jobsAttemptedOnPage = 0;
+      
+      log(`Will attempt ${jobsBeforePageChange} job cards on page ${pageNumber} before moving to next page`);
+      
+      while (currentIndex < jobsToProcess && 
+             totalApplications < MAX_JOBS && 
+             !stopProcessing) {
+        if (currentIndex >= 0 && currentIndex < jobCards.length) {
+          jobsAttemptedOnPage++;
+          jobsProcessedOnPage++;
+          updateBanner(`Applying (${totalApplications + 1}/${MAX_JOBS})`, false, true);
+          
+          const jobCard = jobCards[currentIndex];
+          log(`Processing job ${currentIndex + 1} of ${jobCards.length} (${totalApplications + 1}/${MAX_JOBS} total applications)...`);
+          
+          try {
+            if (!jobCard || !jobCard.clickable) {
+              log(`Invalid job card at index ${currentIndex}`, true);
+              failedApplications++;
+              currentIndex++;
+              continue;
+            }
+            
+            const success = await processJobApplication(jobCard, currentIndex);
+            
+            if (success) {
+              totalApplications++;
+              successfulApplications++;
+              log(`Successfully processed job ${totalApplications} of ${MAX_JOBS}`);
+              
+              // Update the banner with the new count
+              updateBanner(`Applied to ${successfulApplications} jobs`, false, true);
+              
+              if (totalApplications >= MAX_JOBS) {
+                log(`Reached maximum job application limit of ${MAX_JOBS}.`);
+                updateBanner(`All done! Applied to ${successfulApplications} jobs`, false, true);
+                stopProcessing = true;
+                isProcessing = false;
+                return;
+              }
+            } else {
+              updateBanner('Already applied / skipped');
+              log(`Could not process job ${currentIndex + 1} of ${jobCards.length} (may not have Easy Apply)`, true);
+              failedApplications++;
+            }
+          } catch (error) {
             failedApplications++;
+            log(`Error processing job ${currentIndex + 1}: ${error.message}`, true);
+            log(error.stack, true);
+            errorOccurred = error;
+            currentIndex++;
             continue;
           }
           
-          const success = await processJobApplication(jobCard, i);
-          
-          if (success) {
-            log(` Successfully processed job ${i + 1} of ${jobCards.length}`);
-            successfulApplications++;
-          } else {
-            updateBanner('Already applied / skipped');
-            log(` Could not process job ${i + 1} of ${jobCards.length} (may not have Easy Apply)`, true);
-            failedApplications++;
-          }
-        } catch (error) {
-          failedApplications++;
-          log(` Error processing job ${i + 1}: ${error.message}`, true);
-          console.error('Job processing error:', error);
-        }
-        
-        if (i < jobCards.length - 1) {
-          log(`Waiting ${config.delayBetweenJobs}ms before next job...`);
-          updateBanner('Searching jobs…');
-           await delay(config.delayBetweenJobs);
-        }
-      }
+          await delay(1000);
+          currentIndex++;
 
-      const completionMessage = `Batch processing completed. Success: ${successfulApplications}, Failed: ${failedApplications}`;
-      log(completionMessage);
-      
-      if (successfulApplications > 0) {
-        alert(completionMessage);
-      } else if (failedApplications > 0) {
-        alert('Failed to apply to all jobs. Please check the console for details.');
+          // Decide if we should move to next page AFTER attempting the job
+          if (jobsAttemptedOnPage >= jobsBeforePageChange && !stopProcessing) {
+            log(`Attempted ${jobsAttemptedOnPage} jobs on page ${pageNumber}. Deciding whether to move on.`);
+            
+            if (pageNumber >= MAX_PAGES) {
+              log(`Reached maximum page limit of ${MAX_PAGES}.`);
+              updateBanner(`Completed ${MAX_PAGES} pages`);
+              stopProcessing = true;
+              break;
+            }
+            
+            updateBanner(`Moving to page ${pageNumber + 1}...`, false, true);
+            
+            await closeAllModals();
+            await delay(1000);
+            const success = await goToNextPage();
+            if (success) {
+              await delay(3000);
+              isProcessing = false;
+              await processAllJobs(pageNumber + 1);
+              return;
+            } else {
+              log('No more pages available');
+              updateBanner('No more pages', false, true);
+              stopProcessing = true;
+              break;
+            }
+          }
+        } else {
+          // If we've gone through all jobs on this page but haven't reached our per-page limit,
+          // try to go to next page
+          if (jobsProcessedOnPage === 0) {
+            log('No jobs processed on this page, trying next page...');
+            const hasNextPage = await goToNextPage();
+            if (hasNextPage) {
+              await delay(3000);
+              isProcessing = false;
+              await processAllJobs(pageNumber + 1);
+              return;
+            } else {
+              log('No more jobs or pages available');
+              updateBanner('No more jobs available', false, true);
+              break;
+            }
+          }
+        }
       }
       
+      log('===== BATCH APPLY COMPLETED =====');
+      log(`Total processed: ${totalJobs}`);
+      log(`Successfully applied: ${appliedCount}`);
+      log(`Skipped: ${totalJobs - appliedCount}`);
+      
+      updateBanner(`Batch complete: ${appliedCount}/${totalJobs} applied`);
+      
+      isProcessing = false;
+      
+      // Show final alert with accurate status
+      const statusMessage = appliedCount > 0 
+        ? `Batch apply completed!\n\nSuccessfully applied to ${appliedCount} out of ${totalJobs} jobs.`
+        : `Batch apply completed!\n\nNo jobs were applied to.`;
+        
+      alert(statusMessage);
     } catch (error) {
       errorOccurred = error;
       log(`❌ Critical error in batch processing: ${error.message}`, true);
@@ -466,69 +639,75 @@
     try {
       log('Initializing LinkedIn Batch Apply extension...');
       
+      // Initialize banner immediately
+      const banner = getStatusBanner();
+      updateBanner('Extension loaded');
+      
       // Check if we're on a LinkedIn jobs page
       if (!window.location.href.includes('linkedin.com/jobs/')) {
-        log('This extension only works on LinkedIn Jobs pages.', true);
+        const msg = 'This extension only works on LinkedIn Jobs pages.';
+        updateBanner(msg, true);
+        log(msg, true);
         return;
       }
       
       window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
       isProcessing = false;
       
-      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === "startBatchApply") {
-          log(`Received startBatchApply message. Current processing state: ${isProcessing}`);
-          
-          if (isProcessing) {
-            const msg = "Batch process is already running";
-            log(msg, true);
-            sendResponse({ success: false, message: msg });
+      // Message listener for background script communication
+      function handleMessage(request, sender, sendResponse) {
+        if (request.action === 'startBatchApply') {
+          if (window.__LINKEDIN_AUTO_APPLY_RUNNING) {
+            log('Batch apply is already running');
+            sendResponse({ status: 'already_running' });
             return true;
           }
           
-          log("Starting batch process from popup...");
+          log('Starting batch apply from message');
           window.__LINKEDIN_AUTO_APPLY_RUNNING = true;
           
-          const startProcess = async () => {
-            try {
-              log('=== STARTING BATCH PROCESS ===');
-              
-              log('Waiting for Content.js to initialize...');
-              await delay(3000);
-              
-              log('About to call processAllJobs...');
-              await processAllJobs();
-              
+          // Start processing jobs
+          processAllJobs()
+            .then(() => {
               log('=== BATCH PROCESS COMPLETED ===');
-              
-              sendResponse({ 
-                success: true, 
-                message: `Completed: ${successfulApplications} successful, ${failedApplications} failed` 
-              });
-            } catch (error) {
-              log(`Error in batch process: ${error.message}`, true);
-              sendResponse({ 
-                success: false, 
-                message: error.message || 'Unknown error occurred' 
-              });
-            } finally {
-              isProcessing = false;
+              sendResponse({ success: true, message: 'Batch process completed' });
+            })
+            .catch(error => {
+              const errorMsg = `Error in batch process: ${error.message}`;
+              log(errorMsg, true);
+              console.error('Batch process error:', error);
+              sendResponse({ success: false, message: errorMsg });
+            })
+            .finally(() => {
               window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
-            }
-          };
-          
-          startProcess();
-          
+            });
+            
+          return true; // Keep the message channel open for async response
+        } 
+        
+        if (request.action === 'stopBatchApply') {
+          log('Received stopBatchApply message');
+          stopProcessing = true;
+          window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+          sendResponse({ success: true, message: 'Stopping batch process' });
+          return true;
+        } 
+        
+        if (request.action === 'status') {
+          sendResponse({
+            isRunning: window.__LINKEDIN_AUTO_APPLY_RUNNING || false,
+            totalApplied: totalApplications,
+            currentPage: currentPage
+          });
           return true;
         }
         
-        if (request.action === "stopBatchApply") {
-          log("Stopping batch process...");
-          stopProcessing = true;
-          sendResponse({ success: true, message: "Stopping batch process..." });
-          return true;
-        }
-      });
+        // For unknown actions, don't keep the channel open
+        return false;
+      }
+      
+      // Add the message listener
+      chrome.runtime.onMessage.addListener(handleMessage);
       
       log("Batch Apply extension ready. Use the extension popup to start.");
       
