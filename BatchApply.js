@@ -260,11 +260,11 @@
             log(`Content.js completed application with status: ${success ? 'success' : 'failure'}`);
             
             if (success) {
-              appliedCount++;
-              updateBanner(`Applied ${appliedCount}/${totalJobs} ✔`);
+              successfulApplications++;
+              updateBanner(`Applied ${successfulApplications}/${totalJobs} ✔`);
               resolve(true);
             } else {
-              updateBanner(`Applied ${appliedCount}/${totalJobs} - Skipped`);
+              updateBanner(`Applied ${successfulApplications}/${totalJobs} - Skipped`);
               resolve(false);
             }
           }
@@ -603,16 +603,16 @@
       
       log('===== BATCH APPLY COMPLETED =====');
       log(`Total processed: ${totalJobs}`);
-      log(`Successfully applied: ${appliedCount}`);
-      log(`Skipped: ${totalJobs - appliedCount}`);
+      log(`Successfully applied: ${successfulApplications}`);
+      log(`Skipped: ${totalJobs - successfulApplications}`);
       
-      updateBanner(`Batch complete: ${appliedCount}/${totalJobs} applied`);
+      updateBanner(`Batch complete: ${successfulApplications}/${totalJobs} applied`);
       
       isProcessing = false;
       
       // Show final alert with accurate status
-      const statusMessage = appliedCount > 0 
-        ? `Batch apply completed!\n\nSuccessfully applied to ${appliedCount} out of ${totalJobs} jobs.`
+      const statusMessage = successfulApplications > 0 
+        ? `Batch apply completed!\n\nSuccessfully applied to ${successfulApplications} out of ${totalJobs} jobs.`
         : `Batch apply completed!\n\nNo jobs were applied to.`;
         
       alert(statusMessage);

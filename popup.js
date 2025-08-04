@@ -3,11 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const batchApplyBtn = document.getElementById('batch-apply-btn');
   const applyBtn = document.getElementById('apply-btn');
   
-  // Disable buttons initially
   batchApplyBtn.disabled = true;
   applyBtn.disabled = true;
   
-  // Check if we're on a LinkedIn jobs page
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tab = tabs[0];
     
@@ -17,37 +15,30 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Enable buttons if on a LinkedIn jobs page
     batchApplyBtn.disabled = false;
     applyBtn.disabled = false;
     
-    // Handle Batch Apply button click
     batchApplyBtn.addEventListener('click', async () => {
       statusDiv.textContent = 'Starting batch apply to all jobs...';
       statusDiv.style.color = 'inherit';
       
       try {
-        // First, inject Content.js if not already injected
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['Content.js']
         });
         
-        // Then inject BatchApply.js
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['BatchApply.js']
         });
         
-        // Wait a moment for the scripts to initialize
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Send message to start batch apply
         const response = await chrome.tabs.sendMessage(tab.id, { 
           action: 'startBatchApply' 
         }).catch(error => {
           console.error('Message sending failed, retrying...', error);
-          // Try one more time after a delay
           return new Promise(resolve => {
             setTimeout(async () => {
               try {
@@ -76,22 +67,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    // Handle single job apply button click
     applyBtn.addEventListener('click', async () => {
       statusDiv.textContent = 'Starting single job application...';
       statusDiv.style.color = 'inherit';
       
       try {
-        // Inject Content.js for single job application
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['Content.js']
         });
         
-        // Send message to start single job apply
         await chrome.tabs.sendMessage(tab.id, { action: 'startApply' });
         
-        // Close popup after a short delay
         setTimeout(() => window.close(), 500);
       } catch (error) {
         console.error('Error:', error);
