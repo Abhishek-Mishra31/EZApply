@@ -14,7 +14,9 @@
 
   // Banner will be created after the function is defined below
   let showBanner = false;
-  const isLinkedInJobs = location.hostname === "www.linkedin.com" && location.pathname.startsWith("/jobs/");
+  const isLinkedInJobs =
+    location.hostname === "www.linkedin.com" &&
+    location.pathname.startsWith("/jobs/");
   const isEasyApply = location.href.toLowerCase().includes("easy-apply");
   if (isLinkedInJobs && isEasyApply) {
     showBanner = true;
@@ -103,7 +105,7 @@
       ) {
         const cappedValue = Math.min(Math.max(parsedValue, 0.1), 90);
         finalValue = cappedValue.toFixed(1);
-      
+
         if (finalValue.endsWith(".0")) {
           finalValue = finalValue.slice(0, -2);
         }
@@ -111,20 +113,16 @@
         questionText.includes("ctc") ||
         questionText.includes("salary")
       ) {
-  
         const cappedValue = Math.min(Math.max(parsedValue, 0.1), 99);
         finalValue = cappedValue.toFixed(1);
         if (finalValue.endsWith(".0")) {
           finalValue = finalValue.slice(0, -2);
         }
       } else {
-       
         if (requiresWholeNumber || hasRangeConstraint) {
-          
           const wholeValue = Math.min(Math.max(Math.round(parsedValue), 0), 99);
           finalValue = wholeValue.toString();
         } else {
-        
           const decimalValue = Math.max(0.1, parsedValue);
           finalValue = decimalValue.toFixed(1);
           if (finalValue.endsWith(".0")) {
@@ -192,18 +190,25 @@
       // Special handling for contract questions (default to Yes)
       if (!option && isContractQuestion) {
         log("Contract question detected, defaulting to Yes");
-        option = options.find(opt => opt.textContent.trim().toLowerCase() === "yes" || opt.value.toLowerCase() === "yes") || options[1];
+        option =
+          options.find(
+            (opt) =>
+              opt.textContent.trim().toLowerCase() === "yes" ||
+              opt.value.toLowerCase() === "yes"
+          ) || options[1];
       }
 
       // Special handling for yes/no questions
       if (!option && isYesNoQuestion) {
-        const yesOption = options.find(opt => 
-          opt.textContent.trim().toLowerCase() === "yes" || 
-          opt.value.toLowerCase() === "yes"
+        const yesOption = options.find(
+          (opt) =>
+            opt.textContent.trim().toLowerCase() === "yes" ||
+            opt.value.toLowerCase() === "yes"
         );
-        const noOption = options.find(opt => 
-          opt.textContent.trim().toLowerCase() === "no" || 
-          opt.value.toLowerCase() === "no"
+        const noOption = options.find(
+          (opt) =>
+            opt.textContent.trim().toLowerCase() === "no" ||
+            opt.value.toLowerCase() === "no"
         );
 
         // Default to Yes for most questions, unless it's a negative question
@@ -213,31 +218,36 @@
           questionText.includes("criminal");
 
         option = isNegativeQuestion
-          ? (noOption || yesOption)
-          : (yesOption || noOption);
+          ? noOption || yesOption
+          : yesOption || noOption;
       } else {
         // Regular option matching for non-yes/no values
         const valueLower = String(value).toLowerCase();
-        option = options.find(opt =>
-          opt.textContent.trim().toLowerCase() === valueLower ||
-          opt.value.toLowerCase() === valueLower
+        option = options.find(
+          (opt) =>
+            opt.textContent.trim().toLowerCase() === valueLower ||
+            opt.value.toLowerCase() === valueLower
         );
       }
 
       if (option) {
-        log(`Found option for "${value}": "${option.textContent.trim()}" (value: ${option.value}). Applying selection.`);
-        
+        log(
+          `Found option for "${value}": "${option.textContent.trim()}" (value: ${
+            option.value
+          }). Applying selection.`
+        );
+
         // Ensure the select element is properly updated
         element.value = option.value;
         option.selected = true;
-        
+
         // Trigger multiple events to ensure the change is recognized
         element.dispatchEvent(new Event("change", { bubbles: true }));
         element.dispatchEvent(new Event("input", { bubbles: true }));
-        
+
         // Also trigger click events for better compatibility
         option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        
+
         // Focus and blur events to complete the interaction
         await delay(200);
         element.focus();
@@ -253,11 +263,13 @@
 
         // As a fallback, try to select the first non-default option
         if (options.length > 1) {
-          const nonPlaceholderOption = options.find(opt => 
-            !opt.textContent.toLowerCase().includes('select') && 
-            !opt.textContent.toLowerCase().includes('choose') &&
-            opt.value !== ""
-          ) || options[1]; // Usually the first non-default option
+          const nonPlaceholderOption =
+            options.find(
+              (opt) =>
+                !opt.textContent.toLowerCase().includes("select") &&
+                !opt.textContent.toLowerCase().includes("choose") &&
+                opt.value !== ""
+            ) || options[1]; // Usually the first non-default option
           log(
             `Falling back to option: "${nonPlaceholderOption.textContent.trim()}"`
           );
@@ -273,26 +285,42 @@
         element.type === "number" ||
         (element.type === "text" &&
           (element.getAttribute("inputmode") === "numeric" ||
-            /\b(?:\d+\s*)?(?:years?|yrs?|months?|mos?|days?|dys?)\s+(?:[a-z]+\s+){0,3}experience\b/i.test(questionText) ||
-            /how\s+many\s+[a-z]*\s*years?[a-z\s]*experience/i.test(questionText) ||
-            /(?:expected|current)\s+(?:ctc|salary|compensation)/i.test(questionText)));
+            /\b(?:\d+\s*)?(?:years?|yrs?|months?|mos?|days?|dys?)\s+(?:[a-z]+\s+){0,3}experience\b/i.test(
+              questionText
+            ) ||
+            /how\s+many\s+[a-z]*\s*years?[a-z\s]*experience/i.test(
+              questionText
+            ) ||
+            /(?:expected|current)\s+(?:ctc|salary|compensation)/i.test(
+              questionText
+            )));
 
       // Special handling for experience questions that expect a decimal number
-        const isExperienceQuestion = /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:work\s+)?(?:experience|exp|professional\s+experience|relevant\s+experience)\b/i.test(questionText) ||
-          /\b(?:experience|exp)\s+(?:with|in)\s+\w+/i.test(questionText) ||
-          /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:\w+\s+)?experience\b/i.test(questionText);
+      const isExperienceQuestion =
+        /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:work\s+)?(?:experience|exp|professional\s+experience|relevant\s+experience)\b/i.test(
+          questionText
+        ) ||
+        /\b(?:experience|exp)\s+(?:with|in)\s+\w+/i.test(questionText) ||
+        /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:\w+\s+)?experience\b/i.test(
+          questionText
+        );
 
       let finalValue = value;
 
       // Detect any question asking for years of experience (e.g. 8+, 5 years, etc.)
-      const yearsMatch = questionText.match(/(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i);
+      const yearsMatch = questionText.match(
+        /(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i
+      );
       const askedYears = yearsMatch ? parseInt(yearsMatch[1], 10) : null;
 
       // If the field is a Yes/No choice (radio / dropdown with only Yes/No)
       const isYesNoQuestion =
-        (input.tagName === 'SELECT' && [...input.options].every(o => /yes|no/i.test(o.text))) ||
-        (input.type === 'radio' && [...document.querySelectorAll(`input[name="${input.name}"]`)]
-                                 .every(r => /yes|no/i.test(r.nextSibling?.textContent || '')));
+        (input.tagName === "SELECT" &&
+          [...input.options].every((o) => /yes|no/i.test(o.text))) ||
+        (input.type === "radio" &&
+          [...document.querySelectorAll(`input[name="${input.name}"]`)].every(
+            (r) => /yes|no/i.test(r.nextSibling?.textContent || "")
+          ));
 
       // Format numeric inputs properly
       if (isNumericInput) {
@@ -301,13 +329,20 @@
           const numValue = parseFloat(value) || 3;
           finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
           // Dynamic: any number of years in a Yes/No question → Yes
-          const yearsMatch = questionText.match(/(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i);
-          if (yearsMatch && (input.tagName === 'SELECT' || input.type === 'radio')) {
+          const yearsMatch = questionText.match(
+            /(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i
+          );
+          if (
+            yearsMatch &&
+            (input.tagName === "SELECT" || input.type === "radio")
+          ) {
             finalValue = "Yes";
           } else {
             const numValue = parseFloat(finalValue);
             if (!isNaN(numValue) && isExperienceQuestion) {
-              finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
+              finalValue = String(
+                Math.max(0, Math.min(99, Math.round(numValue)))
+              );
               log(`Normalized experience value to: ${finalValue}`);
             }
           }
@@ -315,7 +350,9 @@
           const numValue = parseFloat(finalValue);
           if (!isNaN(numValue)) {
             if (isExperienceQuestion) {
-              finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
+              finalValue = String(
+                Math.max(0, Math.min(99, Math.round(numValue)))
+              );
               log(`Normalized experience value to: ${finalValue}`);
             } else if (numValue < 0) {
               finalValue = "0";
@@ -432,13 +469,260 @@
     }
   });
 
+  // Make processJobApplication globally available
+  window.processJobApplication = async function () {
+    log("Starting application process...");
+    try {
+      // Load user data
+      const userData = await loadUserData();
+      if (!userData) {
+        log("ERROR: No user data found");
+        return;
+      }
+      log("User data loaded successfully");
+
+      const easyApplyButton =
+        document.querySelector(".jobs-apply-button--top-card button") ||
+        document.querySelector("#jobs-apply-button-id") ||
+        document.querySelector(".jobs-apply-button");
+      if (easyApplyButton) {
+        easyApplyButton.click();
+        await delay(2000);
+      } else {
+        throw new Error("Easy Apply button not found on the page.");
+      }
+
+      let maxAttempts = 10;
+      let attemptCount = 0;
+      let lastQuestionCount = -1;
+
+      while (attemptCount < maxAttempts) {
+        attemptCount++;
+        log(`Processing attempt ${attemptCount}/${maxAttempts}`);
+
+        const currentQuestions = document.querySelectorAll(
+          ".fb-dash-form-element"
+        );
+        if (currentQuestions.length === lastQuestionCount && attemptCount > 1) {
+          log(
+            "Loop detected: question count has not changed. Forcing button search.",
+            true
+          );
+          break;
+        }
+        lastQuestionCount = currentQuestions.length;
+
+        await answerQuestionsOnPage(userData);
+
+        await delay(1000);
+
+        // Check for Next button first
+        const nextButton = document.querySelector(
+          'button[aria-label="Continue to next step"], button[aria-label="Next"]'
+        );
+
+        // Check for Review button
+        const reviewButton = document.querySelector(
+          'button[aria-label="Review your application"], button[data-live-test-easy-apply-review-button]'
+        );
+
+        if (nextButton && !nextButton.disabled) {
+          log('Clicking "Next" button...');
+          nextButton.click();
+          await delay(4000);
+          attemptCount = 0;
+        } else if (reviewButton && !reviewButton.disabled) {
+          log('Found "Review" button. Moving to review step.');
+          break;
+        } else {
+          log(
+            "No actionable buttons found. Checking if all questions are answered..."
+          );
+
+          // Check if we're on a success/confirmation page or if no questions found multiple times
+          const successIndicators = document.querySelectorAll(
+            '[data-test="success-message"], .artdeco-inline-feedback--success, [aria-label="Done"], .jobs-apply-confirmation, .jobs-apply-success'
+          );
+
+          const questionElements = document.querySelectorAll(
+            ".fb-dash-form-element"
+          );
+
+          if (
+            successIndicators.length > 0 ||
+            (questionElements.length === 0 && attemptCount > 2)
+          ) {
+            log(
+              "Application appears to be successfully submitted or completed. Exiting process."
+            );
+            chrome.runtime.sendMessage({
+              action: "updateStatus",
+              message: "Application submitted successfully!",
+            });
+            chrome.runtime.sendMessage({
+              action: "applicationComplete",
+              success: true,
+            });
+            return;
+          }
+
+          const unansweredFields = document.querySelectorAll(
+            'input[aria-required="true"]:not([value]), select[aria-required="true"]:not([value]), input[type="radio"][aria-required="true"]:not(:checked)'
+          );
+
+          if (unansweredFields.length === 0) {
+            log(
+              "All required fields appear to be filled. Looking for any available button..."
+            );
+            break;
+          } else {
+            log(
+              `Found ${unansweredFields.length} unanswered required fields. Continuing...`
+            );
+          }
+        }
+      }
+
+      if (attemptCount >= maxAttempts) {
+        log("Maximum attempts reached. Proceeding to review step...");
+      }
+
+      const reviewButton = document.querySelector(
+        'button[aria-label="Review your application"]'
+      );
+      if (reviewButton) {
+        log('Clicking "Review" button...');
+        reviewButton.click();
+        await delay(2000);
+      }
+
+      const submitButton = document.querySelector(
+        'button[aria-label="Submit application"]'
+      );
+      if (submitButton) {
+        log("Final review page. Answering any remaining questions.");
+        await answerQuestionsOnPage(userData);
+        await delay(1000);
+
+        log("Submitting application...");
+        submitButton.click();
+
+        // Wait for submission to complete
+        log("Waiting for submission to complete...");
+        await delay(3000);
+
+        // Check for success indicators
+        const successIndicators = [
+          "div[data-test-application-success]",
+          ".artdeco-inline-feedback--success",
+          "div[data-test-success-message]",
+          'h1:contains("Application submitted")',
+          'h1:contains("Application sent")',
+          'div:contains("Your application has been submitted")',
+        ];
+
+        let success = false;
+        for (const selector of successIndicators) {
+          if (document.querySelector(selector)) {
+            success = true;
+            log("Success indicator found: " + selector);
+            break;
+          }
+        }
+
+        if (success) {
+          log("SUCCESS: Application submitted successfully!");
+          chrome.runtime.sendMessage({
+            action: "updateStatus",
+            message: "Application submitted successfully!",
+          });
+
+          // Close the success modal
+          await closeSuccessModal();
+        } else {
+          log("WARNING: Could not confirm submission success");
+        }
+      } else {
+        log(
+          "Could not find the final submit button. Manual review may be required."
+        );
+        chrome.runtime.sendMessage({
+          action: "updateStatus",
+          message: "Could not find submit button.",
+        });
+      }
+    } catch (error) {
+      log(`ERROR: ${error.message}`);
+      chrome.runtime.sendMessage({
+        action: "updateStatus",
+        message: `Error: ${error.message}`,
+      });
+    }
+  };
+
+  // Expose helper globally
+  window.loadUserData = async function () {
+    try {
+      // Try multiple possible paths for the data.json file
+      const possiblePaths = [
+        "src/assets/data.json",
+        "src/assests/data.json",
+        "assests/data.json",
+        "assets/data.json",
+      ];
+
+      let userData = null;
+      let lastError = null;
+
+      for (const path of possiblePaths) {
+        try {
+          const extensionURL = chrome.runtime.getURL(path);
+          const response = await fetch(extensionURL);
+          if (response.ok) {
+            userData = await response.json();
+            log(`User data loaded successfully from: ${path}`);
+            break;
+          } else {
+            lastError = `Failed to load from ${path}: ${response.status}`;
+          }
+        } catch (error) {
+          lastError = error.message;
+          continue;
+        }
+      }
+
+      if (!userData) {
+        log(`ERROR loading user data: ${lastError}`);
+        // Return a default empty structure to prevent null reference errors
+        return {
+          personalInfo: {},
+          workExperiences: [],
+          education: [],
+          jobPreferences: {},
+          skills: [],
+          keywords: {},
+        };
+      }
+
+      return userData;
+    } catch (error) {
+      log(`ERROR loading user data: ${error.message}`);
+      // Return default structure on any error
+      return {
+        personalInfo: {},
+        workExperiences: [],
+        education: [],
+        jobPreferences: {},
+        skills: [],
+        keywords: {},
+      };
+    }
+  };
+
   async function processApplication() {
     log("Starting application process...");
     try {
-      log("Loading user data...");
-      const userData = await fetch(chrome.runtime.getURL("data.json")).then(
-        (res) => res.json()
-      );
+      const userData = await window.loadUserData();
       log("User data loaded successfully.");
 
       const easyApplyButton =
@@ -783,12 +1067,40 @@
   };
 
   function getAnswerFromPath(userData, path) {
-    if (!path) return null;
-    const value = path
-      .split(".")
-      .reduce((o, k) => (o && o[k] !== "undefined" ? o[k] : null), userData);
-    if (Array.isArray(value)) return value.join(", ");
-    return value;
+    if (!path || !userData) return null;
+
+    try {
+      const keys = path.split(".");
+      let current = userData;
+
+      for (const key of keys) {
+        if (current === null || current === undefined) {
+          return null;
+        }
+
+        // Handle array indices
+        if (key.match(/^\d+$/)) {
+          const index = parseInt(key, 10);
+          if (Array.isArray(current) && index < current.length) {
+            current = current[index];
+          } else {
+            return null;
+          }
+        } else {
+          current = current[key];
+        }
+
+        if (current === undefined) {
+          return null;
+        }
+      }
+
+      if (Array.isArray(current)) return current.join(", ");
+      return current;
+    } catch (error) {
+      log(`Error getting value from path ${path}: ${error.message}`);
+      return null;
+    }
   }
 
   async function closeSuccessModal() {
@@ -932,8 +1244,12 @@
       );
       for (const keyword of sortedKeywords) {
         // Skip years keywords if question looks like skill yes/no
-        if ((keyword === "how many years" || keyword === "years of experience") && 
-            /(?:experience|knowledge|proficiency|familiarity)\s+(?:with|of|in)/i.test(questionText)) {
+        if (
+          (keyword === "how many years" || keyword === "years of experience") &&
+          /(?:experience|knowledge|proficiency|familiarity)\s+(?:with|of|in)/i.test(
+            questionText
+          )
+        ) {
           continue;
         }
         if (questionText.includes(keyword)) {
@@ -946,9 +1262,15 @@
 
       if (!dataPath) {
         // Handle salary / compensation questions generically
-        if (/\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(questionText)) {
+        if (
+          /\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(
+            questionText
+          )
+        ) {
           dataPath = "jobPreferences.expectedCTC";
-        } else if (/\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)) {
+        } else if (
+          /\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)
+        ) {
           dataPath = "jobPreferences.currentSalary";
         }
       }
@@ -961,7 +1283,7 @@
         "notice period": "jobPreferences.noticePeriod",
         gpa: "education.gpa",
         "current ctc": "jobPreferences.currentSalary",
-        "current salary": "jobPreferences.currentSalary"
+        "current salary": "jobPreferences.currentSalary",
       };
 
       for (const [keyword, path] of Object.entries(keywordMap)) {
@@ -975,14 +1297,20 @@
       // Layer 2: Categorical regex patterns
       if (!dataPath) {
         // Location questions
-        const locationRegex = /\b(?:from|relocate|commute|location)\s+(?:to\s+)?(?:hyderabad|bangalore|mumbai|delhi|chennai|pune|remote|onsite)/i;
+        const locationRegex =
+          /\b(?:from|relocate|commute|location)\s+(?:to\s+)?(?:hyderabad|bangalore|mumbai|delhi|chennai|pune|remote|onsite)/i;
         if (locationRegex.test(questionText)) {
-          const userLocation = userData.personalInfo?.location?.toLowerCase() || "";
-          const willingToRelocate = userData.jobPreferences?.willingToRelocate === "Yes";
-          
+          const userLocation =
+            userData.personalInfo?.location?.toLowerCase() || "";
+          const willingToRelocate =
+            userData.jobPreferences?.willingToRelocate === "Yes";
+
           if (questionText.includes("relocate") && willingToRelocate) {
             answer = "Yes";
-          } else if (questionText.includes("from") && userLocation.includes("hyderabad")) {
+          } else if (
+            questionText.includes("from") &&
+            userLocation.includes("hyderabad")
+          ) {
             answer = "Yes";
           } else {
             answer = "No";
@@ -991,36 +1319,117 @@
           dataPath = "location";
         }
         // Work authorization questions
-        else if (/\b(?:authorized|authorization|sponsorship|visa|work\s+permit)\b/i.test(questionText)) {
-          const authorized = userData.jobPreferences?.workAuthorization === "Yes";
+        else if (
+          /\b(?:authorized|authorization|sponsorship|visa|work\s+permit)\b/i.test(
+            questionText
+          )
+        ) {
+          const authorized =
+            userData.jobPreferences?.workAuthorization === "Yes";
           answer = authorized ? "Yes" : "No";
           log(`Layer 2: Work authorization → ${answer}`);
           dataPath = "workAuthorization";
         }
         // Technology & skills questions
-        else if (/\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i.test(questionText)) {
-          const techMatch = questionText.match(/\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i);
-          if (techMatch) {
-            const tech = techMatch[1].trim().toLowerCase();
-            const userSkills = Object.keys(userData.skills || {});
-            const foundSkill = userSkills.find(s => s.toLowerCase().includes(tech));
-            
-            if (foundSkill) {
-              const years = Number(userData.skills[foundSkill]) || 0;
-              if (/\bhow\s+many\s+years?\b/i.test(questionText)) {
-                answer = years.toString();
+        else if (
+          /\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i.test(
+            questionText
+          )
+        ) {
+          const techMatch = questionText.match(
+            /\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i
+          );
+          const technology = techMatch[1].trim().toLowerCase();
+
+          // Ensure we have safe access to user data
+          const userSkills = userData && userData.skills ? userData.skills : [];
+          const workExps =
+            userData && userData.workExperiences
+              ? userData.workExperiences
+              : [];
+
+          // Check if user has this skill
+          let hasSkill = false;
+          let answer = 0;
+
+          if (Array.isArray(userSkills)) {
+            const matchingSkill = userSkills.find(
+              (skill) =>
+                skill &&
+                ((typeof skill === "string" &&
+                  skill.toLowerCase().includes(technology)) ||
+                  (typeof skill === "object" &&
+                    skill.name &&
+                    skill.name.toLowerCase().includes(technology)))
+            );
+
+            if (matchingSkill) {
+              hasSkill = true;
+              if (typeof matchingSkill === "object" && matchingSkill.years) {
+                answer = matchingSkill.years;
               } else {
-                answer = years > 0 ? "Yes" : "No";
+                answer = 2; // Default to 2 years
               }
-            } else {
-              answer = "No";
             }
-            log(`Layer 2: Technology question → ${tech} → ${answer}`);
-            dataPath = "technology";
           }
+
+          // If no direct skill match, check work experience descriptions
+          if (!hasSkill && Array.isArray(workExps)) {
+            let totalYears = 0;
+            workExps.forEach((exp) => {
+              if (
+                exp &&
+                exp.description &&
+                exp.description.toLowerCase().includes(technology)
+              ) {
+                try {
+                  const startDate = new Date(exp.startDate);
+                  const endDate =
+                    exp.endDate && exp.endDate.toLowerCase() === "present"
+                      ? new Date()
+                      : new Date(exp.endDate);
+                  const years = Math.max(
+                    0,
+                    Math.round(
+                      (endDate - startDate) / (1000 * 60 * 60 * 24 * 365)
+                    )
+                  );
+                  totalYears += years;
+                } catch (dateError) {
+                  // Skip invalid dates
+                }
+              }
+            });
+            answer = totalYears > 0 ? totalYears : 0;
+          }
+
+          // If still no answer, provide a reasonable default
+          if (answer === 0) {
+            // Check if it's a common technology
+            const commonTech = [
+              "javascript",
+              "python",
+              "java",
+              "react",
+              "node",
+              "sql",
+              "html",
+              "css",
+            ];
+            if (commonTech.includes(technology)) {
+              answer = 2; // Default for common technologies
+            }
+          }
+
+          log(`Layer 2: ${technology} experience → ${answer} years`);
+          dataPath = `skills.${technology}`;
         }
         // Availability questions
-        else if (/\b(?:how\s+soon|join|start\s+date|availability)\b/i.test(questionText)) {
+        else if (
+          /\b(?:how\s+soon|join|start\s+date|availability)\b/i.test(
+            questionText
+          )
+        ) {
           answer = userData.jobPreferences?.noticePeriod || "15 days";
           log(`Layer 2: Availability question → ${answer}`);
           dataPath = "availability";
@@ -1029,11 +1438,23 @@
 
       // Layer 3: General yes/no fallback
       if (!dataPath) {
-        const negativeKeywords = ["felony", "convicted", "criminal", "disability", "sponsorship", "visa", "authorized"];
-        const isYesNoQuestion = /^\s*(?:are\s+you|do\s+you|have\s+you|can\s+you)/i.test(questionText);
-        
+        const negativeKeywords = [
+          "felony",
+          "convicted",
+          "criminal",
+          "disability",
+          "sponsorship",
+          "visa",
+          "authorized",
+        ];
+
+        const isYesNoQuestion =
+          /^\s*(?:are\s+you|do\s+you|have\s+you|can\s+you)/i.test(questionText);
+
         if (isYesNoQuestion) {
-          const hasNegative = negativeKeywords.some(keyword => questionText.toLowerCase().includes(keyword));
+          const hasNegative = negativeKeywords.some((keyword) =>
+            questionText.toLowerCase().includes(keyword)
+          );
           answer = hasNegative ? "No" : "Yes";
           log(`Layer 3: Generic yes/no → ${answer} (negative: ${hasNegative})`);
           dataPath = "genericYesNo";
@@ -1043,26 +1464,34 @@
       if (!dataPath) continue;
 
       // Handle salary / compensation questions generically
-      if (/\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(questionText)) {
+      if (
+        /\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(questionText)
+      ) {
         dataPath = "jobPreferences.expectedCTC";
-      } else if (/\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)) {
+      } else if (
+        /\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)
+      ) {
         dataPath = "jobPreferences.currentSalary";
       }
 
       if (
         dataPath === "workExperiences" ||
         (questionText.includes("exp") &&
-          (/\bhow many (?:whole )?years of .*?experience\b/i.test(questionText)))
+          /\bhow many (?:whole )?years of .*?experience\b/i.test(questionText))
       ) {
         // Skip if we already have a yes/no answer
         if (answer !== null) {
           continue;
         }
         // Generic experience question: any "how many years... with <anything>"
-        const isExperienceQuestion = /\bhow many (?:whole )?years of .*?experience\b/i.test(questionText);
+        const isExperienceQuestion =
+          /\bhow many (?:whole )?years of .*?experience\b/i.test(questionText);
 
         // Determine if the question expects a Yes/No answer rather than numeric
-        const isYesNoQuestion = questionText.includes("do you have") || questionText.includes("have you worked") || questionText.includes("have experience");
+        const isYesNoQuestion =
+          questionText.includes("do you have") ||
+          questionText.includes("have you worked") ||
+          questionText.includes("have experience");
 
         if (isExperienceQuestion && !isYesNoQuestion) {
           const raw = userData.jobPreferences?.totalExperience ?? "3";
@@ -1132,21 +1561,21 @@
                 userSkill.toLowerCase().includes(cleanSkill)
               );
               if (matchingUserSkill) {
-                const exp = parseInt(userData.skills[matchingUserSkill], 10);
+                const exp = parseInt(userData?.skills[matchingUserSkill], 10);
                 if (exp > maxExp) maxExp = exp;
                 foundSkill = true;
               }
             }
             answer = foundSkill
               ? String(maxExp)
-              : calculateTotalExperience(userData.workExperiences);
+              : calculateTotalExperience(userData?.workExperiences);
           } else {
-            answer = calculateTotalExperience(userData.workExperiences);
+            answer = calculateTotalExperience(userData?.workExperiences);
           }
         }
       } else if (dataPath === "extraAndOptional.skillRatings") {
         const skillKeys = Object.keys(
-          userData.extraAndOptional.skillRatings
+          userData?.extraAndOptional?.skillRatings
         ).sort((a, b) => b.length - a.length);
         const foundSkillKey = skillKeys.find((skillKey) =>
           questionText.includes(skillKey.toLowerCase())
@@ -1226,9 +1655,7 @@
                 log(
                   `Using default "Yes" for work authorization question: "${questionText}"`
                 );
-              }
-              
-              else if (
+              } else if (
                 questionText.includes("comfortable") ||
                 questionText.includes("willing") ||
                 questionText.includes("able to") ||
@@ -1240,9 +1667,7 @@
                 log(
                   `Using default "Yes" for comfort/willingness question: "${questionText}"`
                 );
-              }
-            
-              else if (
+              } else if (
                 questionText.includes("disability") ||
                 questionText.includes("criminal") ||
                 questionText.includes("convicted") ||
@@ -1396,19 +1821,12 @@
     await delay(200);
     log("Finished answering questions on this page.");
   }
-  // Listener for background script to check Easy Apply filter
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "isEasyApplyActive") {
-      const easyApplyActive = !!document.querySelector(
-        'button[aria-label*="Easy Apply"][aria-pressed="true"], button[aria-label*="Easy Apply"].active, li.filter-pill button[aria-pressed="true"][aria-label*="Easy Apply"]'
-      );
-      sendResponse({ easy: easyApplyActive });
-    }
-  });
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "processJobApplication") {
-      processJobApplication().then(() => sendResponse({success: true})).catch(e => sendResponse({success: false, error: e.message}));
+      processJobApplication()
+        .then(() => sendResponse({ success: true }))
+        .catch((e) => sendResponse({ success: false, error: e.message }));
       return true; // async
     }
   });
