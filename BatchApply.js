@@ -714,6 +714,15 @@
           });
           return true;
         }
+
+        if (request.action === 'startBatchApply') {
+          log('Received startBatchApply message');
+          if (!window.__LINKEDIN_AUTO_APPLY_RUNNING) {
+            startBatchApply();
+          }
+          sendResponse({ success: true });
+          return true;
+        }
         
         // For unknown actions, don't keep the channel open
         return false;

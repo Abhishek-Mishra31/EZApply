@@ -1,7 +1,24 @@
 (function () {
+  // Only run on LinkedIn Jobs pages with easy-apply
+  if (
+    !location.hostname.includes("linkedin.com") ||
+    !location.pathname.startsWith("/jobs/") ||
+    !location.href.toLowerCase().includes("easy-apply")
+  ) {
+    return; // do nothing
+  }
+
   console.log(
     "LinkedIn Auto Apply Extension content script loaded. Version: 4.0 (Data-Driven)"
   );
+
+  // Banner will be created after the function is defined below
+  let showBanner = false;
+  const isLinkedInJobs = location.hostname === "www.linkedin.com" && location.pathname.startsWith("/jobs/");
+  const isEasyApply = location.href.toLowerCase().includes("easy-apply");
+  if (isLinkedInJobs && isEasyApply) {
+    showBanner = true;
+  }
 
   let isApplying = false;
   const log = (message) => console.log(`[LinkedIn Auto Apply] ${message}`);
@@ -267,12 +284,15 @@
 
       let finalValue = value;
 
-      // Determine if this is a Yes/No question
+      // Detect any question asking for years of experience (e.g. 8+, 5 years, etc.)
+      const yearsMatch = questionText.match(/(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i);
+      const askedYears = yearsMatch ? parseInt(yearsMatch[1], 10) : null;
+
+      // If the field is a Yes/No choice (radio / dropdown with only Yes/No)
       const isYesNoQuestion =
-        questionText.includes("do you have experience") ||
-        questionText.includes("have you worked") ||
-        questionText.includes("have experience in") ||
-        questionText.includes("is it described");
+        (input.tagName === 'SELECT' && [...input.options].every(o => /yes|no/i.test(o.text))) ||
+        (input.type === 'radio' && [...document.querySelectorAll(`input[name="${input.name}"]`)]
+                                 .every(r => /yes|no/i.test(r.nextSibling?.textContent || '')));
 
       // Format numeric inputs properly
       if (isNumericInput) {
@@ -280,26 +300,30 @@
         if (isExperienceQuestion) {
           const numValue = parseFloat(value) || 3;
           finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
-          log(`Experience value (whole number): ${finalValue}`);
+          // Dynamic: any number of years in a Yes/No question → Yes
+          const yearsMatch = questionText.match(/(\d+)\s*\+?\s*(?:years?\s+)?(?:of\s+)?(?:experience|exp)/i);
+          if (yearsMatch && (input.tagName === 'SELECT' || input.type === 'radio')) {
+            finalValue = "Yes";
+          } else {
+            const numValue = parseFloat(finalValue);
+            if (!isNaN(numValue) && isExperienceQuestion) {
+              finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
+              log(`Normalized experience value to: ${finalValue}`);
+            }
+          }
         } else {
-          // For other numeric inputs, keep original formatting
-          finalValue = String(value);
-        }
-
-        // Ensure the value is within the expected range
-        const numValue = parseFloat(finalValue);
-        if (!isNaN(numValue)) {
-          // For years of experience, cap at 99
-          if (isExperienceQuestion) {
-            finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
-            log(`Normalized experience value to: ${finalValue}`);
+          const numValue = parseFloat(finalValue);
+          if (!isNaN(numValue)) {
+            if (isExperienceQuestion) {
+              finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
+              log(`Normalized experience value to: ${finalValue}`);
+            } else if (numValue < 0) {
+              finalValue = "0";
+            }
+          } else if (isExperienceQuestion) {
+            // Default value if all else fails
+            finalValue = "3.0";
           }
-          // For other numeric inputs, ensure they're positive
-          else if (numValue < 0) {
-            finalValue = "0";
-          }
-        } else if (isExperienceQuestion) {
-          // Default value if all else fails
           finalValue = "3.0";
         }
       }
@@ -1372,4 +1396,20 @@
     await delay(200);
     log("Finished answering questions on this page.");
   }
+  // Listener for background script to check Easy Apply filter
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "isEasyApplyActive") {
+      const easyApplyActive = !!document.querySelector(
+        'button[aria-label*="Easy Apply"][aria-pressed="true"], button[aria-label*="Easy Apply"].active, li.filter-pill button[aria-pressed="true"][aria-label*="Easy Apply"]'
+      );
+      sendResponse({ easy: easyApplyActive });
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "processJobApplication") {
+      processJobApplication().then(() => sendResponse({success: true})).catch(e => sendResponse({success: false, error: e.message}));
+      return true; // async
+    }
+  });
 })();

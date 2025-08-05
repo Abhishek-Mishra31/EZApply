@@ -54,3 +54,30 @@ function getContentScriptFunctions() {
 
   return result;
 }
+
+// ---------------- Enable/Disable action icon ----------------
+const JOBS_URL_PREFIX = "https://www.linkedin.com/jobs/";
+
+function updateActionState(tab) {
+  if (!tab || !tab.id || !tab.url) return;
+
+  // Require literal "easy-apply" in the URL
+  const hasEasyApply = tab.url.toLowerCase().includes('easy-apply');
+  if (!hasEasyApply) {
+    chrome.action.disable(tab.id);
+    return;
+  }
+  chrome.action.enable(tab.id);
+}
+
+// When the tab finishes loading or url changes
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete") {
+    updateActionState(tab);
+  }
+});
+
+// When user switches tabs
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId, (tab) => updateActionState(tab));
+});
