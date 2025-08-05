@@ -1,3 +1,4 @@
+
 (function () {
   "use strict";
 
@@ -49,6 +50,8 @@
   let currentJobIndex = 0;
   let successfulApplications = 0;
   let failedApplications = 0;
+  let totalProcessed = 0;
+  let jobLinks = [];
   let jobCards = [];
   let stopProcessing = false;
   let isProcessing = false;
@@ -92,14 +95,19 @@
     return banner;
   }
 
-  function updateBanner(text, error = false, showCount = false) {
+  function updateBanner(text, error = false, showCount = true) {
     const banner = getStatusBanner();
     
     banner.style.display = 'block';
     banner.style.opacity = '0.95';
     banner.style.background = error ? '#b3261e' : '#0a66c2';
     
-    let statusText = `✅ Applied: ${successfulApplications}/20\n📄 Page: ${currentPage}`;
+    let statusText = `✅ Applied: ${successfulApplications}/${MAX_JOBS}`;
+    
+    // Add page info if available
+    if (currentPage > 1) {
+      statusText += `\n📄 Page: ${currentPage}`;
+    }
     
     // Add the status text if provided
     if (text && text !== 'Applying to jobs') {
@@ -261,10 +269,10 @@
             
             if (success) {
               successfulApplications++;
-              updateBanner(`Applied ${successfulApplications}/${totalJobs} ✔`);
+              updateBanner(`Applied ${successfulApplications}/${jobLinks.length} ✔`);
               resolve(true);
             } else {
-              updateBanner(`Applied ${successfulApplications}/${totalJobs} - Skipped`);
+              updateBanner(`Applied ${successfulApplications}/${jobLinks.length} - Skipped`);
               resolve(false);
             }
           }
@@ -339,22 +347,37 @@
   async function closeAllModals() {
     log('Closing all modals...');
     
-    const closeButtons = [
+    // Check for save/discard modal specifically
+    const saveDiscardModal = document.querySelector('[data-test-modal-id="save-application-modal"]');
+    if (saveDiscardModal) {
+      const discardBtn = saveDiscardModal.querySelector('button[data-test-dialog-secondary-btn]');
+      if (discardBtn && discardBtn.offsetParent !== null) {
+        log('Found save/discard modal - clicking discard');
+        discardBtn.click();
+        await delay(1000);
+        return;
+      }
+    }
+    
+    // Generic close buttons
+    const closeSelectors = [
       'button[aria-label="Dismiss"]',
       'button[aria-label="Close"]',
       'button[data-test-modal-close-btn]',
       'button.artdeco-modal__dismiss',
-      'button.artdeco-toast__dismiss'
+      'button.artdeco-toast__dismiss',
+      'button[data-test-dialog-primary-btn]'
     ];
     
-    for (const selector of closeButtons) {
+    for (const selector of closeSelectors) {
       const buttons = document.querySelectorAll(selector);
       for (const button of buttons) {
         try {
-          if (button.offsetParent !== null) {
+          if (button.offsetParent !== null && button.textContent.toLowerCase().includes('close')) {
             log(`Clicking close button: ${selector}`);
             button.click();
-            await delay(300);
+            await delay(500);
+            break;
           }
         } catch (e) {
           log(`Error clicking close button: ${e.message}`, true);
@@ -362,6 +385,7 @@
       }
     }
     
+    // Fallback to escape key
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, which: 27, bubbles: true }));
     await delay(300);
   }
@@ -438,7 +462,7 @@
 
   async function processAllJobs(pageNumber = 1) {
     // Limit to 3 pages max
-    const MAX_PAGES = 3;
+    // No page limit - continue until MAX_JOBS reached
     
     if (isProcessing) {
       log('Batch processing already in progress; ignoring duplicate call.');
@@ -451,15 +475,11 @@
       return;
     }
     
-    if (pageNumber > MAX_PAGES) {
-      log(`Reached maximum page limit of ${MAX_PAGES}. Stopping.`);
-      updateBanner(`Completed ${MAX_PAGES} pages`);
-      return;
-    }
+    // Allow unlimited pages - only stop when MAX_JOBS reached
     
     isProcessing = true;
-    log(`Starting processAllJobs function - Page ${pageNumber}/${MAX_PAGES}`);
-    updateBanner(`Page ${pageNumber}/${MAX_PAGES} - Finding jobs...`);
+    log(`Starting processAllJobs function - Page ${pageNumber}`);
+    updateBanner(`Page ${pageNumber} - Finding jobs...`);
     
     // Scroll to load job cards
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -487,14 +507,14 @@
         jobCards.push(...refreshed);
       }
       
-      const remainingJobs = 20 - totalApplications;
+      const remainingJobs = MAX_JOBS - totalApplications;
       const jobsToProcess = Math.min(jobCards.length, remainingJobs);
       
-      log(`Found ${jobCards.length} jobs. Processing ${jobsToProcess} jobs (${totalApplications}/20 applied so far)...`);
-      updateBanner(`Page ${pageNumber}/${MAX_PAGES} - Starting...`);
+      log(`Found ${jobCards.length} jobs. Processing ${jobsToProcess} jobs (${totalApplications}/${MAX_JOBS} applied so far)...`);
+      updateBanner(`Page ${pageNumber} - Starting...`);
       
       // Decide how many job cards we will ATTEMPT on this page (includes skips)
-      const jobsBeforePageChange = 3 + Math.floor(Math.random() * 2); // 3-4 jobs
+      const jobsBeforePageChange = 4 + Math.floor(Math.random() * 2); // 4-5 jobs
       let currentIndex = 0;
       let jobsAttemptedOnPage = 0;
       
@@ -557,17 +577,10 @@
           if (jobsAttemptedOnPage >= jobsBeforePageChange && !stopProcessing) {
             log(`Attempted ${jobsAttemptedOnPage} jobs on page ${pageNumber}. Deciding whether to move on.`);
             
-            if (pageNumber >= MAX_PAGES) {
-              log(`Reached maximum page limit of ${MAX_PAGES}.`);
-              updateBanner(`Completed ${MAX_PAGES} pages`);
-              stopProcessing = true;
-              break;
-            }
-            
-            updateBanner(`Moving to page ${pageNumber + 1}...`, false, true);
-            
+            log(`Moving to page ${pageNumber + 1}...`);
             await closeAllModals();
             await delay(1000);
+            
             const success = await goToNextPage();
             if (success) {
               await delay(3000);
@@ -602,17 +615,17 @@
       }
       
       log('===== BATCH APPLY COMPLETED =====');
-      log(`Total processed: ${totalJobs}`);
+      log(`Total processed: ${jobCards.length}`);
       log(`Successfully applied: ${successfulApplications}`);
-      log(`Skipped: ${totalJobs - successfulApplications}`);
+      log(`Skipped: ${jobCards.length - successfulApplications}`);
       
-      updateBanner(`Batch complete: ${successfulApplications}/${totalJobs} applied`);
+      updateBanner(`Batch complete: ${successfulApplications}/${jobCards.length} applied`);
       
       isProcessing = false;
       
       // Show final alert with accurate status
       const statusMessage = successfulApplications > 0 
-        ? `Batch apply completed!\n\nSuccessfully applied to ${successfulApplications} out of ${totalJobs} jobs.`
+        ? `Batch apply completed!\n\nSuccessfully applied to ${successfulApplications} out of ${jobLinks.length} jobs.`
         : `Batch apply completed!\n\nNo jobs were applied to.`;
         
       alert(statusMessage);

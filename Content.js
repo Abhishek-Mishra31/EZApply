@@ -10,7 +10,6 @@
   async function simulateUserInput(element, value) {
     log(`Simulating input for ${element.tagName} with value "${value}"`);
 
-    // Get the container element to check for question context
     const container =
       element.closest(".fb-dash-form-element") ||
       element.closest(".artdeco-text-input") ||
@@ -25,7 +24,6 @@
 
     element.focus();
 
-    // Check if this is a numeric input field
     const isNumericInput =
       element.type === "number" ||
       element.getAttribute("type") === "number" ||
@@ -45,7 +43,6 @@
     if (isNumericInput) {
       let numericValue = value || "3";
 
-      // Handle both integer and decimal values based on context
       const requiresInteger =
         errorMessage.includes("whole number") ||
         questionText.includes("notice period in days") ||
@@ -125,7 +122,6 @@
         finalValue = minValue.toString();
       }
 
-      // Log the value being set
       log(
         `Setting numeric value: ${finalValue} for question: ${questionText.substring(
           0,
@@ -146,7 +142,6 @@
       const valueStr = String(value).toLowerCase();
       const options = Array.from(element.options);
 
-      // Check for Yes/No questions first
       const isYesNoQuestion =
         questionText.includes("are you") ||
         questionText.includes("do you") ||
@@ -154,7 +149,6 @@
         questionText.includes("is this") ||
         questionText.includes("okay for");
 
-      // Special handling for contract and hourly rate questions
       const isContractQuestion =
         questionText.includes("contract") ||
         questionText.includes("6 months") ||
@@ -181,49 +175,18 @@
       // Special handling for contract questions (default to Yes)
       if (!option && isContractQuestion) {
         log("Contract question detected, defaulting to Yes");
-        option =
-          options.find(
-            (opt) =>
-              opt.textContent.trim().toLowerCase() === "yes" ||
-              opt.value.toLowerCase() === "yes" ||
-              opt.textContent.trim().toLowerCase().startsWith("yes")
-          ) || options[1]; // Fallback to first non-default option
+        option = options.find(opt => opt.textContent.trim().toLowerCase() === "yes" || opt.value.toLowerCase() === "yes") || options[1];
       }
 
-      // Special handling for hourly rate questions (default to Yes if acceptable)
-      if (!option && isHourlyRateQuestion) {
-        log("Hourly rate question detected, defaulting to Yes");
-        option =
-          options.find(
-            (opt) =>
-              opt.textContent.trim().toLowerCase() === "yes" ||
-              opt.value.toLowerCase() === "yes" ||
-              opt.textContent.trim().toLowerCase().startsWith("yes")
-          ) || options[1];
-
-        if (!option && options.length > 0) {
-          // If we still don't have an option, try to find any option that might be a positive response
-          option =
-            options.find(
-              (opt) =>
-                !opt.textContent.trim().toLowerCase().includes("no") &&
-                !opt.value.toLowerCase().includes("no")
-            ) || options[options.length - 1]; // Fallback to last option
-        }
-      }
-
-      // If still no match and it's a Yes/No question, try to find Yes/No options
+      // Special handling for yes/no questions
       if (!option && isYesNoQuestion) {
-        const yesOption = options.find(
-          (opt) =>
-            opt.textContent.trim().toLowerCase() === "yes" ||
-            opt.value.toLowerCase() === "yes"
+        const yesOption = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === "yes" || 
+          opt.value.toLowerCase() === "yes"
         );
-
-        const noOption = options.find(
-          (opt) =>
-            opt.textContent.trim().toLowerCase() === "no" ||
-            opt.value.toLowerCase() === "no"
+        const noOption = options.find(opt => 
+          opt.textContent.trim().toLowerCase() === "no" || 
+          opt.value.toLowerCase() === "no"
         );
 
         // Default to Yes for most questions, unless it's a negative question
@@ -233,33 +196,35 @@
           questionText.includes("criminal");
 
         option = isNegativeQuestion
-          ? noOption || yesOption
-          : yesOption || noOption;
+          ? (noOption || yesOption)
+          : (yesOption || noOption);
+      } else {
+        // Regular option matching for non-yes/no values
+        const valueLower = String(value).toLowerCase();
+        option = options.find(opt =>
+          opt.textContent.trim().toLowerCase() === valueLower ||
+          opt.value.toLowerCase() === valueLower
+        );
       }
 
       if (option) {
-        log(
-          `Found option for "${value}": "${option.textContent.trim()}". Applying selection.`
-        );
-        await delay(Math.random() * 300 + 200);
-
-        // Set the value directly first
+        log(`Found option for "${value}": "${option.textContent.trim()}" (value: ${option.value}). Applying selection.`);
+        
+        // Ensure the select element is properly updated
         element.value = option.value;
-
-        // Then dispatch events to ensure React picks up the change
-        element.dispatchEvent(new Event("input", { bubbles: true }));
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-        element.dispatchEvent(new Event("click", { bubbles: true }));
-
-        // Also try setting the selected property directly
         option.selected = true;
-
-        // Additional events to ensure the UI updates
+        
+        // Trigger multiple events to ensure the change is recognized
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        
+        // Also trigger click events for better compatibility
+        option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        
+        // Focus and blur events to complete the interaction
         await delay(200);
         element.focus();
-        element.dispatchEvent(new Event("focus", { bubbles: true }));
         element.dispatchEvent(new Event("blur", { bubbles: true }));
-
         await delay(Math.random() * 500 + 300);
       } else {
         const availableOptions = options
@@ -271,13 +236,17 @@
 
         // As a fallback, try to select the first non-default option
         if (options.length > 1) {
-          const nonDefaultOption = options[1]; // Usually the first non-default option
+          const nonPlaceholderOption = options.find(opt => 
+            !opt.textContent.toLowerCase().includes('select') && 
+            !opt.textContent.toLowerCase().includes('choose') &&
+            opt.value !== ""
+          ) || options[1]; // Usually the first non-default option
           log(
-            `Falling back to option: "${nonDefaultOption.textContent.trim()}"`
+            `Falling back to option: "${nonPlaceholderOption.textContent.trim()}"`
           );
-          element.value = nonDefaultOption.value;
+          element.value = nonPlaceholderOption.value;
           element.dispatchEvent(new Event("change", { bubbles: true }));
-          nonDefaultOption.selected = true;
+          nonPlaceholderOption.selected = true;
         }
       }
     }
@@ -287,41 +256,42 @@
         element.type === "number" ||
         (element.type === "text" &&
           (element.getAttribute("inputmode") === "numeric" ||
-            /\d+\s*(year|yr|yrs|month|mo|mos|day|dy|dys)/i.test(questionText)));
+            /\b(?:\d+\s*)?(?:years?|yrs?|months?|mos?|days?|dys?)\s+(?:[a-z]+\s+){0,3}experience\b/i.test(questionText) ||
+            /how\s+many\s+[a-z]*\s*years?[a-z\s]*experience/i.test(questionText) ||
+            /(?:expected|current)\s+(?:ctc|salary|compensation)/i.test(questionText)));
 
       // Special handling for experience questions that expect a decimal number
-      const isExperienceQuestion =
-        questionText.includes("exp") ||
-        questionText.includes("experience") ||
-        questionText.includes("year of experience");
+        const isExperienceQuestion = /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:work\s+)?(?:experience|exp|professional\s+experience|relevant\s+experience)\b/i.test(questionText) ||
+          /\b(?:experience|exp)\s+(?:with|in)\s+\w+/i.test(questionText) ||
+          /\b(?:\d+\s*)?years?\s+(?:of\s+)?(?:\w+\s+)?experience\b/i.test(questionText);
 
       let finalValue = value;
 
+      // Determine if this is a Yes/No question
+      const isYesNoQuestion =
+        questionText.includes("do you have experience") ||
+        questionText.includes("have you worked") ||
+        questionText.includes("have experience in") ||
+        questionText.includes("is it described");
+
       // Format numeric inputs properly
       if (isNumericInput) {
-        // For experience questions, ensure we have a decimal if needed
+        // For experience questions, use whole numbers 0-99
         if (isExperienceQuestion) {
-          // If value is a whole number or invalid, add .0 to make it a decimal
-          if (
-            (String(value).indexOf(".") === -1 || isNaN(value)) &&
-            value !== ""
-          ) {
-            const numValue = parseFloat(value) || 3.0; // Default to 3.0 if invalid
-            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
-            log(`Formatted experience value to decimal: ${finalValue}`);
-          } else {
-            // Ensure it's a valid decimal between 0.1 and 50.0
-            const numValue = parseFloat(value);
-            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
-          }
+          const numValue = parseFloat(value) || 3;
+          finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
+          log(`Experience value (whole number): ${finalValue}`);
+        } else {
+          // For other numeric inputs, keep original formatting
+          finalValue = String(value);
         }
 
         // Ensure the value is within the expected range
         const numValue = parseFloat(finalValue);
         if (!isNaN(numValue)) {
-          // For years of experience, cap at a reasonable number
+          // For years of experience, cap at 99
           if (isExperienceQuestion) {
-            finalValue = Math.min(Math.max(0.1, numValue), 50).toFixed(1);
+            finalValue = String(Math.max(0, Math.min(99, Math.round(numValue))));
             log(`Normalized experience value to: ${finalValue}`);
           }
           // For other numeric inputs, ensure they're positive
@@ -383,8 +353,7 @@
     if (request.action === "startApply") {
       if (isApplying) {
         log("Application already in progress.");
-        sendResponse({ status: "already_applying" });
-        return true;
+        return; // no async work, so no return true
       }
       isApplying = true;
       log("Received startApply message. Beginning process.");
@@ -395,7 +364,7 @@
       });
 
       sendResponse({ status: "started" });
-      return true;
+      return true; // keep channel open for this async response
     }
 
     // Handle messages from BatchApply.js
@@ -407,7 +376,7 @@
           success: false,
           error: "Already applying",
         });
-        return true;
+        return; // no async work, so no return true
       }
 
       isApplying = true;
@@ -435,7 +404,7 @@
           });
         });
 
-      return true;
+      return true; // keep channel open for this async response
     }
   });
 
@@ -938,6 +907,11 @@
         (a, b) => b.length - a.length
       );
       for (const keyword of sortedKeywords) {
+        // Skip years keywords if question looks like skill yes/no
+        if ((keyword === "how many years" || keyword === "years of experience") && 
+            /(?:experience|knowledge|proficiency|familiarity)\s+(?:with|of|in)/i.test(questionText)) {
+          continue;
+        }
         if (questionText.includes(keyword)) {
           dataPath = keywordMapping[keyword];
           log(`Keyword "${keyword}" matched. Data path is "${dataPath}".`);
@@ -946,31 +920,130 @@
         }
       }
 
+      if (!dataPath) {
+        // Handle salary / compensation questions generically
+        if (/\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(questionText)) {
+          dataPath = "jobPreferences.expectedCTC";
+        } else if (/\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)) {
+          dataPath = "jobPreferences.currentSalary";
+        }
+      }
+
+      // Layer 1: High-priority keyword mapping
+      const keywordMap = {
+        salary: "jobPreferences.expectedCTC",
+        ctc: "jobPreferences.expectedCTC",
+        ectc: "jobPreferences.expectedCTC",
+        "notice period": "jobPreferences.noticePeriod",
+        gpa: "education.gpa",
+        "current ctc": "jobPreferences.currentSalary",
+        "current salary": "jobPreferences.currentSalary"
+      };
+
+      for (const [keyword, path] of Object.entries(keywordMap)) {
+        if (questionText.toLowerCase().includes(keyword)) {
+          dataPath = path;
+          log(`Layer 1: Keyword match → ${keyword} → ${path}`);
+          break;
+        }
+      }
+
+      // Layer 2: Categorical regex patterns
+      if (!dataPath) {
+        // Location questions
+        const locationRegex = /\b(?:from|relocate|commute|location)\s+(?:to\s+)?(?:hyderabad|bangalore|mumbai|delhi|chennai|pune|remote|onsite)/i;
+        if (locationRegex.test(questionText)) {
+          const userLocation = userData.personalInfo?.location?.toLowerCase() || "";
+          const willingToRelocate = userData.jobPreferences?.willingToRelocate === "Yes";
+          
+          if (questionText.includes("relocate") && willingToRelocate) {
+            answer = "Yes";
+          } else if (questionText.includes("from") && userLocation.includes("hyderabad")) {
+            answer = "Yes";
+          } else {
+            answer = "No";
+          }
+          log(`Layer 2: Location question → ${answer}`);
+          dataPath = "location";
+        }
+        // Work authorization questions
+        else if (/\b(?:authorized|authorization|sponsorship|visa|work\s+permit)\b/i.test(questionText)) {
+          const authorized = userData.jobPreferences?.workAuthorization === "Yes";
+          answer = authorized ? "Yes" : "No";
+          log(`Layer 2: Work authorization → ${answer}`);
+          dataPath = "workAuthorization";
+        }
+        // Technology & skills questions
+        else if (/\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i.test(questionText)) {
+          const techMatch = questionText.match(/\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i);
+          if (techMatch) {
+            const tech = techMatch[1].trim().toLowerCase();
+            const userSkills = Object.keys(userData.skills || {});
+            const foundSkill = userSkills.find(s => s.toLowerCase().includes(tech));
+            
+            if (foundSkill) {
+              const years = Number(userData.skills[foundSkill]) || 0;
+              if (/\bhow\s+many\s+years?\b/i.test(questionText)) {
+                answer = years.toString();
+              } else {
+                answer = years > 0 ? "Yes" : "No";
+              }
+            } else {
+              answer = "No";
+            }
+            log(`Layer 2: Technology question → ${tech} → ${answer}`);
+            dataPath = "technology";
+          }
+        }
+        // Availability questions
+        else if (/\b(?:how\s+soon|join|start\s+date|availability)\b/i.test(questionText)) {
+          answer = userData.jobPreferences?.noticePeriod || "15 days";
+          log(`Layer 2: Availability question → ${answer}`);
+          dataPath = "availability";
+        }
+      }
+
+      // Layer 3: General yes/no fallback
+      if (!dataPath) {
+        const negativeKeywords = ["felony", "convicted", "criminal", "disability", "sponsorship", "visa", "authorized"];
+        const isYesNoQuestion = /^\s*(?:are\s+you|do\s+you|have\s+you|can\s+you)/i.test(questionText);
+        
+        if (isYesNoQuestion) {
+          const hasNegative = negativeKeywords.some(keyword => questionText.toLowerCase().includes(keyword));
+          answer = hasNegative ? "No" : "Yes";
+          log(`Layer 3: Generic yes/no → ${answer} (negative: ${hasNegative})`);
+          dataPath = "genericYesNo";
+        }
+      }
+
       if (!dataPath) continue;
+
+      // Handle salary / compensation questions generically
+      if (/\bexpected\s+(?:ctc|salary|compensation|package)\b/i.test(questionText)) {
+        dataPath = "jobPreferences.expectedCTC";
+      } else if (/\bcurrent\s+(?:ctc|salary|compensation)\b/i.test(questionText)) {
+        dataPath = "jobPreferences.currentSalary";
+      }
 
       if (
         dataPath === "workExperiences" ||
         (questionText.includes("exp") &&
-          (questionText.includes("java") ||
-            questionText.includes("angular") ||
-            questionText.includes("javascript")))
+          (/\bhow many (?:whole )?years of .*?experience\b/i.test(questionText)))
       ) {
-        // Check if this is a Yes/No experience question vs numeric years question
-        const isYesNoQuestion =
-          questionText.includes("do you have experience") ||
-          questionText.includes("have you worked") ||
-          questionText.includes("have experience in") ||
-          questionText.includes("is it described");
+        // Skip if we already have a yes/no answer
+        if (answer !== null) {
+          continue;
+        }
+        // Generic experience question: any "how many years... with <anything>"
+        const isExperienceQuestion = /\bhow many (?:whole )?years of .*?experience\b/i.test(questionText);
 
-        // If it's a technology experience question, make sure we return a numeric value
-        if (
-          !isYesNoQuestion &&
-          (questionText.includes("java") ||
-            questionText.includes("angular") ||
-            questionText.includes("javascript"))
-        ) {
-          answer = "3.0"; // Default to 3 years experience
-          log(`Setting default experience for technology question: ${answer}`);
+        // Determine if the question expects a Yes/No answer rather than numeric
+        const isYesNoQuestion = questionText.includes("do you have") || questionText.includes("have you worked") || questionText.includes("have experience");
+
+        if (isExperienceQuestion && !isYesNoQuestion) {
+          const raw = userData.jobPreferences?.totalExperience ?? "3";
+          answer = String(Math.max(0, Math.min(99, Math.round(Number(raw)))));
+          log(`Experience question: ${answer} years`);
         }
 
         // Check if dropdown has Yes/No options
@@ -1130,7 +1203,7 @@
                   `Using default "Yes" for work authorization question: "${questionText}"`
                 );
               }
-              // Comfort/willingness questions - typically "Yes"
+              
               else if (
                 questionText.includes("comfortable") ||
                 questionText.includes("willing") ||
@@ -1144,7 +1217,7 @@
                   `Using default "Yes" for comfort/willingness question: "${questionText}"`
                 );
               }
-              // Disability, criminal, or negative questions - typically "No"
+            
               else if (
                 questionText.includes("disability") ||
                 questionText.includes("criminal") ||
@@ -1296,7 +1369,6 @@
         log(`Error processing question "${questionText}": ${error.message}`);
       }
     }
-
     await delay(200);
     log("Finished answering questions on this page.");
   }
