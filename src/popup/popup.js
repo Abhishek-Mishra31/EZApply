@@ -7,7 +7,6 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tab = tabs[0];
 
-    // 1. Must be on LinkedIn Jobs page
     if (
       !tab ||
       !tab.url ||
@@ -18,8 +17,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 2. Extension icon is only enabled when URL contains 'easy-apply'
-    //    (handled by background script), so we can safely enable the button
     batchApplyBtn.disabled = false;
 
     batchApplyBtn.addEventListener("click", async () => {
