@@ -1,19 +1,54 @@
+// Type definitions for the extension
+interface JobCard {
+  card: Element;
+  clickable: Element;
+  title: string;
+}
+
+interface Config {
+  delayBetweenJobs: number;
+  maxRetries: number;
+  jobCardSelector: string;
+  jobTitleSelector: string;
+  jobDetailsPanel: string;
+  jobDetailsContent: string;
+  easyApplyButtonSelector: string;
+  applicationModalSelector: string;
+  appliedIndicator: string;
+}
+
+interface MessageRequest {
+  action: string;
+  [key: string]: any;
+}
+
+interface MessageResponse {
+  success?: boolean;
+  message?: string;
+  status?: string;
+  isRunning?: boolean;
+  totalApplied?: number;
+  currentPage?: number;
+}
+
+interface Window {
+  __LINKEDIN_AUTO_APPLY_RUNNING: boolean;
+}
 
 (function () {
   "use strict";
 
   console.log("LinkedIn Batch Apply Extension loaded. Version: 7.0 (Job Limit & Multi-page)");
   
-  // Maximum number of jobs to apply to in total
   const MAX_JOBS = 20;
   let totalApplications = 0;
   let currentPage = 1;
 
-  function delay(ms) {
+  function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  const config = {
+  const config: Config = {
     delayBetweenJobs: 300, 
     maxRetries: 2,
     jobCardSelector: '.job-card-container, li.jobs-search-results__list-item, li.scaffold-layout__list-item, li[data-occludable-job-id]',
@@ -45,19 +80,19 @@
     ].join(',')
   };
 
-  window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+  (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
 
   let currentJobIndex = 0;
   let successfulApplications = 0;
   let failedApplications = 0;
   let totalProcessed = 0;
-  let jobLinks = [];
-  let jobCards = [];
+  let jobLinks: string[] = [];
+  let jobCards: JobCard[] = [];
   let stopProcessing = false;
   let isProcessing = false;
 
-  function getStatusBanner() {
-    let banner = document.getElementById('batch-apply-status');
+  function getStatusBanner(): HTMLElement {
+    let banner = document.getElementById('batch-apply-status') as HTMLElement;
     if (!banner) {
       banner = document.createElement('div');
       banner.id = 'batch-apply-status';
@@ -95,21 +130,19 @@
     return banner;
   }
 
-  function updateBanner(text, error = false, showCount = true) {
+  function updateBanner(text?: string, error = false, showCount = true): void {
     const banner = getStatusBanner();
     
     banner.style.display = 'block';
     banner.style.opacity = '0.95';
     banner.style.background = error ? '#b3261e' : '#0a66c2';
     
-    let statusText = `✅ Applied: ${successfulApplications}/${MAX_JOBS}`;
-    
-    // Add page info if available
+    let statusText = `Job Limit: ${MAX_JOBS}`;
+  
     if (currentPage > 1) {
       statusText += `\n📄 Page: ${currentPage}`;
     }
     
-    // Add the status text if provided
     if (text && text !== 'Applying to jobs') {
       statusText = `🔄 ${text}\n${statusText}`;
     }
@@ -118,13 +151,13 @@
     banner.style.zIndex = '2147483647';
   }
 
-  const log = (message, isError = false) => {
+  const log = (message: string, isError = false): void => {
     const timestamp = new Date().toISOString().substr(11, 8);
     const logMessage = `[${timestamp}] ${message}`;
     console.log(`%c${logMessage}`, isError ? 'color: red' : 'color: blue');
   };
 
-  function waitForElement(selector, timeout = 10000) {
+  function waitForElement(selector: string, timeout = 10000): Promise<Element | null> {
     return new Promise((resolve) => {
       log(`Waiting for element: ${selector}`);
       const startTime = Date.now();
@@ -165,9 +198,9 @@
     });
   }
 
-  function findJobCards() {
+  function findJobCards(): JobCard[] {
     const cards = Array.from(document.querySelectorAll(config.jobCardSelector));
-    const validCards = [];
+    const validCards: JobCard[] = [];
     
     for (const card of cards) {
       const appliedFeedback = card.querySelector('.artdeco-inline-feedback__message');
@@ -190,8 +223,8 @@
     return validCards;
   }
 
-  async function openJobCard(jobCard, index) {
-    if (!jobCard || !document.body.contains(jobCard)) {
+  async function openJobCard(jobCard: JobCard, index: number): Promise<boolean> {
+    if (!jobCard || !document.body.contains(jobCard.card)) {
       log('Job card is no longer in the DOM');
       return false;
     }
@@ -199,20 +232,21 @@
     log(`Opening job card ${index + 1}...`);
     
     try {
-      jobCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      jobCard.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300);
       
-      jobCard.click();
+      (jobCard.clickable as HTMLElement).click();
       await delay(2000);
       
       return true;
     } catch (error) {
-      log(`Error opening job card: ${error.message}`, true);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`Error opening job card: ${errorMessage}`, true);
       return false;
     }
   }
 
-  async function processJobApplication(jobData, index) {
+  async function processJobApplication(jobData: JobCard, index: number): Promise<boolean> {
     try {
       const { card, clickable, title } = jobData;
       log(`===== Processing job ${index + 1}: ${title} =====`);
@@ -222,7 +256,7 @@
       await delay(300);
       
       log('Clicking job card to open details...');
-      clickable.click();
+      (clickable as HTMLElement).click();
       
       log('Waiting for job details to load...');
       const jobDetails = await waitForElement(
@@ -256,10 +290,10 @@
       log('Sending message to Content.js to process job application...');
       
       // Wait for Content.js to complete the application
-      const applicationComplete = await new Promise((resolve) => {
+      const applicationComplete = await new Promise<boolean>((resolve) => {
         let messageHandled = false;
         
-        const handleMessage = (message, sender, sendResponse) => {
+        const handleMessage = (message: any, sender: any, sendResponse: any) => {
           if (message.action === 'applicationComplete' && !messageHandled) {
             messageHandled = true;
             chrome.runtime.onMessage.removeListener(handleMessage);
@@ -284,7 +318,8 @@
         try {
           chrome.runtime.sendMessage({ action: 'processJobApplication' });
         } catch (error) {
-          log(`Error sending message to Content.js: ${error.message}`, true);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          log(`Error sending message to Content.js: ${errorMessage}`, true);
           if (!messageHandled) {
             messageHandled = true;
             chrome.runtime.onMessage.removeListener(handleMessage);
@@ -305,7 +340,8 @@
       return applicationComplete;
       
     } catch (error) {
-      log(`Error processing job: ${error.message}`, true);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`Error processing job: ${errorMessage}`, true);
       console.error('Job processing error:', error);
       return false;
     } finally {
@@ -315,7 +351,7 @@
   }
 
   // Inject Content.js
-  async function injectContentScript() {
+  async function injectContentScript(): Promise<boolean> {
     return new Promise((resolve) => {
       if (document.querySelector('script[src*="Content.js"]')) {
         log('Content.js already injected');
@@ -337,23 +373,23 @@
     });
   }
 
-  async function submitApplication() {
+  async function submitApplication(): Promise<boolean> {
     log('Delegating application submission to Content.js...');
   
     return true;
   }
 
   // Close all modals
-  async function closeAllModals() {
+  async function closeAllModals(): Promise<void> {
     log('Closing all modals...');
     
     // Check for save/discard modal specifically
     const saveDiscardModal = document.querySelector('[data-test-modal-id="save-application-modal"]');
     if (saveDiscardModal) {
       const discardBtn = saveDiscardModal.querySelector('button[data-test-dialog-secondary-btn]');
-      if (discardBtn && discardBtn.offsetParent !== null) {
+      if (discardBtn && (discardBtn as HTMLElement).offsetParent !== null) {
         log('Found save/discard modal - clicking discard');
-        discardBtn.click();
+        (discardBtn as HTMLElement).click();
         await delay(1000);
         return;
       }
@@ -371,16 +407,17 @@
     
     for (const selector of closeSelectors) {
       const buttons = document.querySelectorAll(selector);
-      for (const button of buttons) {
+      for (const button of Array.from(buttons)) {
         try {
-          if (button.offsetParent !== null && button.textContent.toLowerCase().includes('close')) {
+          if ((button as HTMLElement).offsetParent !== null && button.textContent?.toLowerCase().includes('close')) {
             log(`Clicking close button: ${selector}`);
-            button.click();
+            (button as HTMLElement).click();
             await delay(500);
             break;
           }
         } catch (e) {
-          log(`Error clicking close button: ${e.message}`, true);
+          const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+          log(`Error clicking close button: ${errorMessage}`, true);
         }
       }
     }
@@ -390,7 +427,7 @@
     await delay(300);
   }
 
-  async function applyIfEasyApplyVisible() {
+  async function applyIfEasyApplyVisible(): Promise<void> {
     const easyApplyBtn = document.querySelector(
       [
         '#jobs-apply-button-id',
@@ -401,9 +438,9 @@
     );
     if (easyApplyBtn) {
       log('Easy Apply button already visible in right panel. Triggering Content.js immediately...');
-      const success = await new Promise((resolve) => {
+      const success = await new Promise<boolean>((resolve) => {
         let handled = false;
-        const listener = (msg) => {
+        const listener = (msg: any) => {
           if (msg.action === 'applicationComplete' && !handled) {
             handled = true;
             chrome.runtime.onMessage.removeListener(listener);
@@ -427,7 +464,7 @@
     }
   }
 
-  async function goToNextPage() {
+  async function goToNextPage(): Promise<boolean> {
     try {
       log('Attempting to navigate to next page...');
       currentPage++;
@@ -441,12 +478,12 @@
       
       for (const selector of nextButtonSelectors) {
         const nextButton = document.querySelector(selector);
-        if (nextButton && !nextButton.disabled) {
+        if (nextButton && !(nextButton as HTMLButtonElement).disabled) {
           log(`Found next page button with selector: ${selector}`);
           updateBanner(`Moving to page ${currentPage}...`, false, true);
           nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
           await delay(1000); // Slightly longer delay for better reliability
-          nextButton.click();
+          (nextButton as HTMLElement).click();
           await delay(4000); // Wait for page to load
           return true;
         }
@@ -455,24 +492,25 @@
       log('No enabled next page button found', true);
       return false;
     } catch (error) {
-      log(`Error navigating to next page: ${error.message}`, true);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`Error navigating to next page: ${errorMessage}`, true);
       return false;
     }
   }
 
-  async function processAllJobs(pageNumber = 1) {
+  async function processAllJobs(pageNumber = 1): Promise<boolean> {
     // Limit to 3 pages max
     // No page limit - continue until MAX_JOBS reached
     
     if (isProcessing) {
       log('Batch processing already in progress; ignoring duplicate call.');
-      return;
+      return false;
     }
     
     if (totalApplications >= MAX_JOBS) {
       log(`Reached maximum job application limit of ${MAX_JOBS}. Stopping.`);
       updateBanner(`Reached ${MAX_JOBS} job limit`);
-      return;
+      return false;
     }
     
     // Allow unlimited pages - only stop when MAX_JOBS reached
@@ -487,7 +525,7 @@
     
     stopProcessing = false;
     let jobsProcessedOnPage = 0;
-    let errorOccurred = null;
+    let errorOccurred: Error | null = null;
 
     try {
       log('Finding job cards...');
@@ -554,7 +592,7 @@
                 updateBanner(`All done! Applied to ${successfulApplications} jobs`, false, true);
                 stopProcessing = true;
                 isProcessing = false;
-                return;
+                return true;
               }
             } else {
               updateBanner('Already applied / skipped');
@@ -563,9 +601,12 @@
             }
           } catch (error) {
             failedApplications++;
-            log(`Error processing job ${currentIndex + 1}: ${error.message}`, true);
-            log(error.stack, true);
-            errorOccurred = error;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            log(`Error processing job ${currentIndex + 1}: ${errorMessage}`, true);
+            if (error instanceof Error) {
+              log(error.stack || '', true);
+            }
+            errorOccurred = error instanceof Error ? error : new Error('Unknown error');
             currentIndex++;
             continue;
           }
@@ -586,7 +627,7 @@
               await delay(3000);
               isProcessing = false;
               await processAllJobs(pageNumber + 1);
-              return;
+              return true;
             } else {
               log('No more pages available');
               updateBanner('No more pages', false, true);
@@ -604,7 +645,7 @@
               await delay(3000);
               isProcessing = false;
               await processAllJobs(pageNumber + 1);
-              return;
+              return true;
             } else {
               log('No more jobs or pages available');
               updateBanner('No more jobs available', false, true);
@@ -629,14 +670,16 @@
         : `Batch apply completed!\n\nNo jobs were applied to.`;
         
       alert(statusMessage);
+      return true;
     } catch (error) {
-      errorOccurred = error;
-      log(`❌ Critical error in batch processing: ${error.message}`, true);
+      errorOccurred = error instanceof Error ? error : new Error('Unknown error');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`❌ Critical error in batch processing: ${errorMessage}`, true);
       console.error('Batch processing error:', error);
       return false;
     } finally {
       log('Cleaning up batch process...');
-      window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+      (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
       isProcessing = false;
       
       if (errorOccurred) {
@@ -648,7 +691,7 @@
   }
 
   // Initialize the extension
-  async function init() {
+  async function init(): Promise<void> {
     try {
       log('Initializing LinkedIn Batch Apply extension...');
       
@@ -664,20 +707,20 @@
         return;
       }
       
-      window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+      (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
       isProcessing = false;
       
       // Message listener for background script communication
-      function handleMessage(request, sender, sendResponse) {
+      function handleMessage(request: MessageRequest, sender: any, sendResponse: (response: MessageResponse) => void): boolean {
         if (request.action === 'startBatchApply') {
-          if (window.__LINKEDIN_AUTO_APPLY_RUNNING) {
+          if ((window as any).__LINKEDIN_AUTO_APPLY_RUNNING) {
             log('Batch apply is already running');
             sendResponse({ status: 'already_running' });
             return true;
           }
           
           log('Starting batch apply from message');
-          window.__LINKEDIN_AUTO_APPLY_RUNNING = true;
+          (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = true;
           
           // Start processing jobs
           processAllJobs()
@@ -686,13 +729,13 @@
               sendResponse({ success: true, message: 'Batch process completed' });
             })
             .catch(error => {
-              const errorMsg = `Error in batch process: ${error.message}`;
+              const errorMsg = `Error in batch process: ${error instanceof Error ? error.message : 'Unknown error'}`;
               log(errorMsg, true);
               console.error('Batch process error:', error);
               sendResponse({ success: false, message: errorMsg });
             })
             .finally(() => {
-              window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+              (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
             });
             
           return true; // Keep the message channel open for async response
@@ -701,14 +744,14 @@
         if (request.action === 'stopBatchApply') {
           log('Received stopBatchApply message');
           stopProcessing = true;
-          window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+          (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
           sendResponse({ success: true, message: 'Stopping batch process' });
           return true;
         } 
         
         if (request.action === 'status') {
           sendResponse({
-            isRunning: window.__LINKEDIN_AUTO_APPLY_RUNNING || false,
+            isRunning: (window as any).__LINKEDIN_AUTO_APPLY_RUNNING || false,
             totalApplied: totalApplications,
             currentPage: currentPage
           });
@@ -717,8 +760,9 @@
 
         if (request.action === 'startBatchApply') {
           log('Received startBatchApply message');
-          if (!window.__LINKEDIN_AUTO_APPLY_RUNNING) {
-            startBatchApply();
+          if (!(window as any).__LINKEDIN_AUTO_APPLY_RUNNING) {
+            // startBatchApply function doesn't exist, so we'll call processAllJobs directly
+            processAllJobs();
           }
           sendResponse({ success: true });
           return true;
@@ -734,9 +778,10 @@
       log("Batch Apply extension ready. Use the extension popup to start.");
       
     } catch (error) {
-      log(`Initialization error: ${error.message}`, true);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`Initialization error: ${errorMessage}`, true);
       console.error('Initialization error:', error);
-      window.__LINKEDIN_AUTO_APPLY_RUNNING = false;
+      (window as any).__LINKEDIN_AUTO_APPLY_RUNNING = false;
     }
   }
 

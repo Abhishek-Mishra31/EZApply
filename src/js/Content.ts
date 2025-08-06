@@ -1,3 +1,95 @@
+// Type definitions for the extension
+interface UserData {
+  personalInfo: {
+    fullName: string;
+    email: string;
+    phone: string;
+    linkedin: string;
+    location: string;
+    pronouns?: string;
+    countryOfResidence?: string;
+  };
+  jobPreferences: {
+    expectedCTC: string;
+    totalITExperience: string;
+    totalMonthsExperience: string;
+    currentSalary: string;
+    servingNoticePeriod: string;
+    currentlyWorking?: boolean;
+    immediateJoiner?: boolean;
+    noticePeriod?: string;
+    hybridWork?: boolean;
+    commuteToLocation?: boolean;
+    skillRatings?: { [key: string]: string };
+    technologies?: { [key: string]: boolean };
+    willingToRelocate?: boolean;
+    workAuthorization?: string;
+    totalExperience?: string;
+    expectedSalary?: string;
+  };
+  educationAndInternships: {
+    hasBachelorsDegree: boolean;
+  };
+  education?: {
+    gpa: string;
+    graduationDate: string;
+    currentlyEnrolled: boolean;
+  };
+  documentsAndLinks: {
+    resumeURL: string;
+    coverLetter: string;
+    portfolioURL: string;
+    personalWebsite: string;
+  };
+  assessmentsAndSkills: {
+    githubURL: string;
+    leetcodeURL: string;
+  };
+  behavioralAndMotivation: {
+    strengths: string;
+    weaknesses: string;
+  };
+  legalAndWorkAuth: {
+    authorizedToWorkIn: string;
+    visaType: string;
+    needSponsorship: string;
+  };
+  availability: {
+    startDate: string;
+  };
+  extraAndOptional: {
+    openToRemoteWork: boolean;
+    lookingForInternship: boolean;
+    unpaidInternshipComfort: string;
+    skillRatings?: { [key: string]: string };
+    driversLicense?: boolean;
+    passportAvailability?: boolean;
+    requireAccommodations?: boolean;
+    openToContract?: boolean;
+    wantsMentoring?: boolean;
+    keywordMappings?: {
+      driversLicense: string;
+    };
+  };
+  workExperiences: Array<{
+    duration: string;
+    description?: string;
+    startDate?: string;
+    endDate?: string;
+    [key: string]: any;
+  }>;
+  skills?: { [key: string]: any };
+  keywords?: { [key: string]: any };
+}
+
+interface QuestionMapping {
+  [key: string]: string;
+}
+
+interface MessageRequest {
+  action: string;
+}
+
 (function () {
   // Only run on LinkedIn Jobs pages with easy-apply
   if (
@@ -23,22 +115,30 @@
   }
 
   let isApplying = false;
-  const log = (message) => console.log(`[LinkedIn Auto Apply] ${message}`);
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const log = (message: string): void =>
+    console.log(`[LinkedIn Auto Apply] ${message}`);
+  const delay = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
-  async function simulateUserInput(element, value) {
+  async function simulateUserInput(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    value: string
+  ): Promise<void> {
     log(`Simulating input for ${element.tagName} with value "${value}"`);
 
     const container =
       element.closest(".fb-dash-form-element") ||
       element.closest(".artdeco-text-input") ||
       element.closest(".artdeco-form-element") ||
-      document;
+      element.parentElement;
 
-    const questionText = container.textContent.trim().toLowerCase();
-    const errorElement = container.nextElementSibling?.querySelector(
+    const containerElement =
+      container instanceof Element ? container : document.body;
+    const questionText =
+      containerElement?.textContent?.trim().toLowerCase() || "";
+    const errorElement = containerElement.nextElementSibling?.querySelector(
       ".artdeco-inline-feedback--error"
-    );
+    ) as HTMLElement;
     const errorMessage = errorElement?.textContent?.trim().toLowerCase() || "";
 
     element.focus();
@@ -113,11 +213,8 @@
         questionText.includes("ctc") ||
         questionText.includes("salary")
       ) {
-        const cappedValue = Math.min(Math.max(parsedValue, 0.1), 99);
-        finalValue = cappedValue.toFixed(1);
-        if (finalValue.endsWith(".0")) {
-          finalValue = finalValue.slice(0, -2);
-        }
+        // For compensation inputs allow large numbers, keep as integer
+        finalValue = Math.round(parsedValue).toString();
       } else {
         if (requiresWholeNumber || hasRangeConstraint) {
           const wholeValue = Math.min(Math.max(Math.round(parsedValue), 0), 99);
@@ -153,9 +250,24 @@
     }
 
     if (element.tagName === "SELECT") {
+      const selectElement = element as HTMLSelectElement;
+      selectElement.value = value;
+      selectElement.dispatchEvent(new Event("change", { bubbles: true }));
+      selectElement.dispatchEvent(new Event("input", { bubbles: true }));
+      selectElement.dispatchEvent(new Event("blur", { bubbles: true }));
+
+      // Handle multi-select if needed
+      if (selectElement.hasAttribute("multiple")) {
+        const options = selectElement.options;
+        const values = value.split(",").map((v) => v.trim());
+        for (let i = 0; i < options.length; i++) {
+          options[i].selected = values.includes(options[i].value);
+        }
+      }
+
       let option = null;
       const valueStr = String(value).toLowerCase();
-      const options = Array.from(element.options);
+      const options = Array.from((element as HTMLSelectElement).options);
 
       const isYesNoQuestion =
         questionText.includes("are you") ||
@@ -174,17 +286,28 @@
       // Try exact match first
       option = options.find(
         (opt) =>
-          opt.textContent.trim().toLowerCase() === valueStr ||
+          (opt.textContent?.trim().toLowerCase() || "") === valueStr ||
           opt.value.toLowerCase() === valueStr
       );
 
-      // If no exact match, try partial match
+      // If no exact match, try partial match on text/value
       if (!option) {
         option = options.find(
           (opt) =>
-            opt.textContent.trim().toLowerCase().includes(valueStr) ||
+            (opt.textContent?.trim().toLowerCase() || "").includes(valueStr) ||
             (opt.value && opt.value.toLowerCase().includes(valueStr))
         );
+      }
+
+      // Special handling: if the value looks like a phone or country code, attempt numeric substring match
+      if (!option) {
+        const digits = valueStr.replace(/[^0-9]/g, "");
+        if (digits.length >= 1) {
+          option = options.find((opt) => {
+            const textDigits = (opt.textContent || "").replace(/[^0-9]/g, "");
+            return textDigits === digits || textDigits.endsWith(digits);
+          });
+        }
       }
 
       // Special handling for contract questions (default to Yes)
@@ -193,7 +316,7 @@
         option =
           options.find(
             (opt) =>
-              opt.textContent.trim().toLowerCase() === "yes" ||
+              (opt.textContent?.trim().toLowerCase() || "") === "yes" ||
               opt.value.toLowerCase() === "yes"
           ) || options[1];
       }
@@ -202,79 +325,82 @@
       if (!option && isYesNoQuestion) {
         const yesOption = options.find(
           (opt) =>
-            opt.textContent.trim().toLowerCase() === "yes" ||
+            (opt.textContent?.trim().toLowerCase() || "") === "yes" ||
             opt.value.toLowerCase() === "yes"
         );
         const noOption = options.find(
           (opt) =>
-            opt.textContent.trim().toLowerCase() === "no" ||
+            (opt.textContent?.trim().toLowerCase() || "") === "no" ||
             opt.value.toLowerCase() === "no"
         );
 
-        // Default to Yes for most questions, unless it's a negative question
-        const isNegativeQuestion =
-          questionText.includes("not") ||
-          questionText.includes("disability") ||
-          questionText.includes("criminal");
-
-        option = isNegativeQuestion
-          ? noOption || yesOption
-          : yesOption || noOption;
+        // If the question asks about having >= N years experience, choose Yes by default
+        const yearsReq = questionText.match(/(\d+)\s*\+?\s*years?/);
+        if (yearsReq && yesOption) {
+          option = yesOption;
+        } else {
+          // Default to Yes for most questions, unless it's a negative question
+          const isNegativeQuestion =
+            questionText.includes("not") ||
+            questionText.includes("disability") ||
+            questionText.includes("criminal");
+          option = isNegativeQuestion ? noOption || yesOption : yesOption || noOption;
+        }
       } else {
         // Regular option matching for non-yes/no values
         const valueLower = String(value).toLowerCase();
         option = options.find(
           (opt) =>
-            opt.textContent.trim().toLowerCase() === valueLower ||
+            (opt.textContent?.trim().toLowerCase() || "") === valueLower ||
             opt.value.toLowerCase() === valueLower
         );
       }
 
       if (option) {
         log(
-          `Found option for "${value}": "${option.textContent.trim()}" (value: ${
-            option.value
-          }). Applying selection.`
+          `Found option for "${value}": "${
+            option.textContent?.trim() || ""
+          }" (value: ${option.value}). Applying selection.`
         );
 
         // Ensure the select element is properly updated
-        element.value = option.value;
+        selectElement.value = option.value;
         option.selected = true;
 
         // Trigger multiple events to ensure the change is recognized
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-        element.dispatchEvent(new Event("input", { bubbles: true }));
+        selectElement.dispatchEvent(new Event("change", { bubbles: true }));
+        selectElement.dispatchEvent(new Event("input", { bubbles: true }));
 
         // Also trigger click events for better compatibility
         option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
         // Focus and blur events to complete the interaction
         await delay(200);
-        element.focus();
-        element.dispatchEvent(new Event("blur", { bubbles: true }));
+        selectElement.focus();
+        selectElement.dispatchEvent(new Event("blur", { bubbles: true }));
         await delay(Math.random() * 500 + 300);
       } else {
         const availableOptions = options
-          .map((opt) => `"${opt.textContent.trim()}" (value: ${opt.value})`)
+          .map(
+            (opt) => `"${opt.textContent?.trim() || ""}" (value: ${opt.value})`
+          )
           .join(", ");
         log(
           `Could not find an option for "${value}". Available options: ${availableOptions}`
         );
 
-        // As a fallback, try to select the first non-default option
-        if (options.length > 1) {
-          const nonPlaceholderOption =
-            options.find(
-              (opt) =>
-                !opt.textContent.toLowerCase().includes("select") &&
-                !opt.textContent.toLowerCase().includes("choose") &&
-                opt.value !== ""
-            ) || options[1]; // Usually the first non-default option
-          log(
-            `Falling back to option: "${nonPlaceholderOption.textContent.trim()}"`
+        // Find a non-placeholder option as fallback
+        const nonPlaceholderOption = options.find(
+          (opt) =>
+            opt.value &&
+            opt.value !== "" &&
+            !/(select an option|choose)/i.test(opt.textContent ?? "")
+        );
+        if (nonPlaceholderOption) {
+          (element as HTMLSelectElement).value = nonPlaceholderOption.value;
+          (element as HTMLSelectElement).dispatchEvent(
+            new Event("change", { bubbles: true })
           );
-          element.value = nonPlaceholderOption.value;
-          element.dispatchEvent(new Event("change", { bubbles: true }));
           nonPlaceholderOption.selected = true;
         }
       }
@@ -315,11 +441,15 @@
 
       // If the field is a Yes/No choice (radio / dropdown with only Yes/No)
       const isYesNoQuestion =
-        (input.tagName === "SELECT" &&
-          [...input.options].every((o) => /yes|no/i.test(o.text))) ||
-        (input.type === "radio" &&
-          [...document.querySelectorAll(`input[name="${input.name}"]`)].every(
-            (r) => /yes|no/i.test(r.nextSibling?.textContent || "")
+        (element.tagName === "SELECT" &&
+          Array.from((element as HTMLSelectElement).options).every((o) =>
+            /yes|no/i.test(o.text || "")
+          )) ||
+        (element.type === "radio" &&
+          Array.from(
+            document.querySelectorAll(`input[name="${element.name}"]`)
+          ).every((r) =>
+            /yes|no/i.test((r as Element).nextElementSibling?.textContent || "")
           ));
 
       // Format numeric inputs properly
@@ -334,7 +464,8 @@
           );
           if (
             yearsMatch &&
-            (input.tagName === "SELECT" || input.type === "radio")
+            (element.tagName === "SELECT" ||
+              (element as HTMLInputElement).type === "radio")
           ) {
             finalValue = "Yes";
           } else {
@@ -376,19 +507,19 @@
         await delay(100);
 
         // Clear the field first
-        element.value = "";
+        (element as HTMLInputElement).value = "";
         element.dispatchEvent(new Event("input", { bubbles: true }));
 
         // Type the value character by character for text inputs
         if (element.type === "text" || element.tagName === "TEXTAREA") {
           for (let i = 0; i < finalValue.length; i++) {
-            element.value += finalValue[i];
+            (element as HTMLInputElement).value += finalValue[i];
             element.dispatchEvent(new Event("input", { bubbles: true }));
             await delay(Math.random() * 50 + 30);
           }
         } else {
           // For number inputs, set the value directly
-          element.value = finalValue;
+          (element as HTMLInputElement).value = finalValue;
           element.dispatchEvent(new Event("input", { bubbles: true }));
         }
 
@@ -400,7 +531,7 @@
         await delay(300);
       } else {
         // For other input types, just set the value directly
-        element.value = finalValue;
+        (element as HTMLInputElement).value = finalValue;
         element.dispatchEvent(new Event("input", { bubbles: true }));
         element.dispatchEvent(new Event("change", { bubbles: true }));
       }
@@ -410,71 +541,85 @@
     await delay(Math.random() * 200 + 100);
   }
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "startApply") {
-      if (isApplying) {
-        log("Application already in progress.");
-        return; // no async work, so no return true
-      }
-      isApplying = true;
-      log("Received startApply message. Beginning process.");
-
-      processApplication().finally(() => {
-        isApplying = false;
-        log("Application process has concluded.");
-      });
-
-      sendResponse({ status: "started" });
-      return true; // keep channel open for this async response
-    }
-
-    // Handle messages from BatchApply.js
-    if (request.action === "processJobApplication") {
-      if (isApplying) {
-        log("Application already in progress.");
-        chrome.runtime.sendMessage({
-          action: "applicationComplete",
-          success: false,
-          error: "Already applying",
-        });
-        return; // no async work, so no return true
-      }
-
-      isApplying = true;
-      log("Starting job application process from BatchApply.js...");
-
-      // Immediately acknowledge the message so the sender's port can close without errors
-      sendResponse({ status: "started" });
-
-      processApplication()
-        .then(() => {
-          isApplying = false;
-          log("Application completed successfully");
-          chrome.runtime.sendMessage({
-            action: "applicationComplete",
-            success: true,
+  chrome.runtime.onMessage.addListener(
+    (
+      request: any,
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response: any) => void
+    ) => {
+      if (request.action === "startApply" || request.action === "startBatchApply") {
+        if (isApplying) {
+          log("Application already in progress.");
+          sendResponse({
+            success: false,
+            message: "Application already in progress.",
           });
-        })
-        .catch((error) => {
+          return;
+        }
+
+        const userData = (window as any).loadUserData();
+        log("Received startApply message. Beginning process.");
+
+        processApplication().finally(() => {
           isApplying = false;
-          log(`Application failed: ${error.message}`);
+          log("Application process has concluded.");
+        });
+
+        sendResponse({ success: true });
+        return true; // keep channel open for this async response
+      }
+
+      // Handle messages from BatchApply.js
+      if (request.action === "processJobApplication") {
+        if (isApplying) {
+          log("Application already in progress.");
           chrome.runtime.sendMessage({
             action: "applicationComplete",
             success: false,
-            error: error.message,
+            error: "Already applying",
           });
-        });
+          return; // no async work, so no return true
+        }
 
-      return true; // keep channel open for this async response
+        isApplying = true;
+        log("Starting job application process from BatchApply.js...");
+
+        // Immediately acknowledge the message so the sender's port can close without errors
+        sendResponse({ success: true });
+
+        processApplication()
+          .then(() => {
+            isApplying = false;
+            log("Application completed successfully");
+            chrome.runtime.sendMessage({
+              action: "applicationComplete",
+              success: true,
+            });
+          })
+          .catch((error) => {
+            isApplying = false;
+            const errorMessage =
+              error instanceof Error ? error.message : "Unknown error";
+            log(`Application failed: ${errorMessage}`);
+            chrome.runtime.sendMessage({
+              action: "applicationComplete",
+              success: false,
+              error: errorMessage,
+            });
+          });
+
+        return true; // keep channel open for this async response
+      }
+      return;
     }
-  });
+  );
 
   // Make processJobApplication globally available
-  window.processJobApplication = async function () {
+  (window as any).processJobApplication = async function (): Promise<void> {
     log("Starting application process...");
     try {
       // Load user data
-      const userData = await loadUserData();
+      const userData = await (window as any).loadUserData();
       if (!userData) {
         log("ERROR: No user data found");
         return;
@@ -486,7 +631,7 @@
         document.querySelector("#jobs-apply-button-id") ||
         document.querySelector(".jobs-apply-button");
       if (easyApplyButton) {
-        easyApplyButton.click();
+        (easyApplyButton as HTMLElement).click();
         await delay(2000);
       } else {
         throw new Error("Easy Apply button not found on the page.");
@@ -505,8 +650,7 @@
         );
         if (currentQuestions.length === lastQuestionCount && attemptCount > 1) {
           log(
-            "Loop detected: question count has not changed. Forcing button search.",
-            true
+            "Loop detected: question count has not changed. Forcing button search."
           );
           break;
         }
@@ -526,12 +670,15 @@
           'button[aria-label="Review your application"], button[data-live-test-easy-apply-review-button]'
         );
 
-        if (nextButton && !nextButton.disabled) {
+        if (nextButton && !(nextButton as HTMLButtonElement).disabled) {
           log('Clicking "Next" button...');
-          nextButton.click();
+          (nextButton as HTMLElement).click();
           await delay(4000);
           attemptCount = 0;
-        } else if (reviewButton && !reviewButton.disabled) {
+        } else if (
+          reviewButton &&
+          !(reviewButton as HTMLButtonElement).disabled
+        ) {
           log('Found "Review" button. Moving to review step.');
           break;
         } else {
@@ -592,7 +739,7 @@
       );
       if (reviewButton) {
         log('Clicking "Review" button...');
-        reviewButton.click();
+        (reviewButton as HTMLElement).click();
         await delay(2000);
       }
 
@@ -605,7 +752,7 @@
         await delay(1000);
 
         log("Submitting application...");
-        submitButton.click();
+        (submitButton as HTMLElement).click();
 
         // Wait for submission to complete
         log("Waiting for submission to complete...");
@@ -652,16 +799,18 @@
         });
       }
     } catch (error) {
-      log(`ERROR: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      log(`ERROR: ${errorMessage}`);
       chrome.runtime.sendMessage({
         action: "updateStatus",
-        message: `Error: ${error.message}`,
+        message: `Error: ${errorMessage}`,
       });
     }
   };
 
   // Expose helper globally
-  window.loadUserData = async function () {
+  (window as any).loadUserData = async function (): Promise<UserData> {
     try {
       // Try multiple possible paths for the data.json file
       const possiblePaths = [
@@ -686,7 +835,9 @@
             lastError = `Failed to load from ${path}: ${response.status}`;
           }
         } catch (error) {
-          lastError = error.message;
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          lastError = errorMessage;
           continue;
         }
       }
@@ -695,26 +846,118 @@
         log(`ERROR loading user data: ${lastError}`);
         // Return a default empty structure to prevent null reference errors
         return {
-          personalInfo: {},
+          personalInfo: {
+            fullName: "",
+            email: "",
+            phone: "",
+            linkedin: "",
+            location: "",
+          },
+          jobPreferences: {
+            expectedCTC: "",
+            totalITExperience: "",
+            totalMonthsExperience: "",
+            currentSalary: "",
+            servingNoticePeriod: "",
+          },
+          educationAndInternships: {
+            hasBachelorsDegree: false,
+          },
+          documentsAndLinks: {
+            resumeURL: "",
+            coverLetter: "",
+            portfolioURL: "",
+            personalWebsite: "",
+          },
+          assessmentsAndSkills: {
+            githubURL: "",
+            leetcodeURL: "",
+          },
+          behavioralAndMotivation: {
+            strengths: "",
+            weaknesses: "",
+          },
+          legalAndWorkAuth: {
+            authorizedToWorkIn: "",
+            visaType: "",
+            needSponsorship: "",
+          },
+          availability: {
+            startDate: "",
+          },
+          extraAndOptional: {
+            openToRemoteWork: false,
+            lookingForInternship: false,
+            unpaidInternshipComfort: "",
+          },
           workExperiences: [],
-          education: [],
-          jobPreferences: {},
-          skills: [],
-          keywords: {},
+          education: {
+            gpa: "",
+            graduationDate: "",
+            currentlyEnrolled: false,
+          },
         };
       }
 
       return userData;
     } catch (error) {
-      log(`ERROR loading user data: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      log(`ERROR loading user data: ${errorMessage}`);
       // Return default structure on any error
       return {
-        personalInfo: {},
+        personalInfo: {
+          fullName: "",
+          email: "",
+          phone: "",
+          linkedin: "",
+          location: "",
+        },
         workExperiences: [],
-        education: [],
-        jobPreferences: {},
-        skills: [],
+        education: {
+          gpa: "",
+          graduationDate: "",
+          currentlyEnrolled: false,
+        },
+        jobPreferences: {
+          expectedCTC: "",
+          totalITExperience: "",
+          totalMonthsExperience: "",
+          currentSalary: "",
+          servingNoticePeriod: "",
+        },
+        skills: {},
         keywords: {},
+        educationAndInternships: {
+          hasBachelorsDegree: false,
+        },
+        documentsAndLinks: {
+          resumeURL: "",
+          coverLetter: "",
+          portfolioURL: "",
+          personalWebsite: "",
+        },
+        assessmentsAndSkills: {
+          githubURL: "",
+          leetcodeURL: "",
+        },
+        behavioralAndMotivation: {
+          strengths: "",
+          weaknesses: "",
+        },
+        legalAndWorkAuth: {
+          authorizedToWorkIn: "",
+          visaType: "",
+          needSponsorship: "",
+        },
+        availability: {
+          startDate: "",
+        },
+        extraAndOptional: {
+          openToRemoteWork: false,
+          lookingForInternship: false,
+          unpaidInternshipComfort: "",
+        },
       };
     }
   };
@@ -722,7 +965,7 @@
   async function processApplication() {
     log("Starting application process...");
     try {
-      const userData = await window.loadUserData();
+      const userData = await (window as any).loadUserData();
       log("User data loaded successfully.");
 
       const easyApplyButton =
@@ -730,7 +973,7 @@
         document.querySelector("#jobs-apply-button-id") ||
         document.querySelector(".jobs-apply-button");
       if (easyApplyButton) {
-        easyApplyButton.click();
+        (easyApplyButton as HTMLElement).click();
         await delay(2000);
       } else {
         throw new Error("Easy Apply button not found on the page.");
@@ -749,8 +992,7 @@
         );
         if (currentQuestions.length === lastQuestionCount && attemptCount > 1) {
           log(
-            "Loop detected: question count has not changed. Forcing button search.",
-            true
+            "Loop detected: question count has not changed. Forcing button search."
           );
           break;
         }
@@ -770,12 +1012,15 @@
           'button[aria-label="Review your application"], button[data-live-test-easy-apply-review-button]'
         );
 
-        if (nextButton && !nextButton.disabled) {
+        if (nextButton && !(nextButton as HTMLButtonElement).disabled) {
           log('Clicking "Next" button...');
-          nextButton.click();
+          (nextButton as HTMLElement).click();
           await delay(4000);
           attemptCount = 0;
-        } else if (reviewButton && !reviewButton.disabled) {
+        } else if (
+          reviewButton &&
+          !(reviewButton as HTMLButtonElement).disabled
+        ) {
           log('Found "Review" button. Moving to review step.');
           break;
         } else {
@@ -836,7 +1081,7 @@
       );
       if (reviewButton) {
         log('Clicking "Review" button...');
-        reviewButton.click();
+        (reviewButton as HTMLElement).click();
         await delay(2000);
       }
 
@@ -849,7 +1094,7 @@
         await delay(1000);
 
         log("Submitting application...");
-        submitButton.click();
+        (submitButton as HTMLElement).click();
 
         // Wait for submission to complete
         log("Waiting for submission to complete...");
@@ -896,55 +1141,45 @@
         });
       }
     } catch (error) {
-      log(`ERROR: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      log(`ERROR: ${errorMessage}`);
       chrome.runtime.sendMessage({
         action: "updateStatus",
-        message: `Error: ${error.message}`,
+        message: `Error: ${errorMessage}`,
       });
     }
   }
 
-  const keywordMapping = {
+  const keywordMapping: { [key: string]: string } = {
     pronoun: "personalInfo.pronouns",
     "country of residence": "personalInfo.countryOfResidence",
     "full name": "personalInfo.fullName",
     email: "personalInfo.email",
     phone: "personalInfo.phone",
+    "phone country code": "personalInfo.phoneCountryCode",
+    "country code": "personalInfo.phoneCountryCode",
     location: "personalInfo.location",
-
     "authorized to work": "legalAndWorkAuth.authorizedToWorkIn",
     visa: "legalAndWorkAuth.visaType",
     sponsorship: "legalAndWorkAuth.needSponsorship",
-
     gpa: "education.gpa",
     "graduation date": "education.graduationDate",
     student: "education.currentlyEnrolled",
     internship: "extraAndOptional.lookingForInternship",
-
     salary: "jobPreferences.expectedCTC",
     "expected ctc": "jobPreferences.expectedCTC",
     ectc: "jobPreferences.salaryExpectation",
-    "expected ctc": "jobPreferences.expectedCTC",
     "expected compensation": "jobPreferences.expectedCTC",
     "current salary": "jobPreferences.currentSalary",
     "current ctc": "jobPreferences.currentSalary",
-    "current annual compensation": "jobPreferences.currentSalary",
-    "current ctc in inr": "jobPreferences.currentSalary",
-    "current annual compensation in inr": "jobPreferences.currentSalary",
-    "expected salary": "jobPreferences.expectedCTC",
-    "expected ctc": "jobPreferences.expectedCTC",
-    "expected annual compensation": "jobPreferences.expectedCTC",
-    "expected ctc in inr": "jobPreferences.expectedCTC",
-    "expected annual compensation in inr": "jobPreferences.expectedCTC",
     "total years of professional experience":
       "jobPreferences.totalITExperience",
     "total additional months of experience":
       "jobPreferences.totalMonthsExperience",
-    "current ctc": "jobPreferences.currentSalary",
     remote: "extraAndOptional.openToRemoteWork",
     bachelor: "educationAndInternships.hasBachelorsDegree",
     degree: "educationAndInternships.hasBachelorsDegree",
-
     resume: "documentsAndLinks.resumeURL",
     "cover letter": "documentsAndLinks.coverLetter",
     portfolio: "documentsAndLinks.portfolioURL",
@@ -952,41 +1187,25 @@
     github: "assessmentsAndSkills.githubURL",
     leetcode: "assessmentsAndSkills.leetcodeURL",
     linkedin: "personalInfo.linkedin",
-
     strength: "behavioralAndMotivation.strengths",
     weakness: "behavioralAndMotivation.weaknesses",
-
     "start date": "availability.startDate",
     "start immediately": "availability.startDate",
     "notice period": "jobPreferences.servingNoticePeriod",
     "serving notice period": "jobPreferences.servingNoticePeriod",
     "are you serving a notice period": "jobPreferences.servingNoticePeriod",
-    "are you currently serving a notice period":
-      "jobPreferences.servingNoticePeriod",
     "already working": "jobPreferences.currentlyWorking",
     "currently working": "jobPreferences.currentlyWorking",
     "are you currently working": "jobPreferences.currentlyWorking",
     "immediate joiner": "jobPreferences.immediateJoiner",
     "immediate to 1 week joiner": "jobPreferences.immediateJoiner",
-    "how soon": "jobPreferences.noticePeriod",
-    "how soon can you join": "jobPreferences.noticePeriod",
-    resigned: "jobPreferences.resigned",
-    "last working date": "jobPreferences.lastWorkingDateConfirmed",
-    "start within 5 days": "jobPreferences.immediateJoiner",
-    "1 week joiner": "jobPreferences.immediateJoiner",
-    "hybrid setting": "jobPreferences.hybridWork",
-    "hybrid work": "jobPreferences.hybridWork",
-    "working in a hybrid": "jobPreferences.hybridWork",
-    "comfortable working in hybrid": "jobPreferences.hybridWork",
     hybrid: "jobPreferences.hybridWork",
     "commuting to this job's location": "jobPreferences.commuteToLocation",
     "commute to location": "jobPreferences.commuteToLocation",
     "commuting to job's location": "jobPreferences.commuteToLocation",
     "comfortable commuting": "jobPreferences.commuteToLocation",
-
     "c#": "jobPreferences.skillRatings.C#",
     "next.js": "jobPreferences.skillRatings.Next.js",
-
     docker: "jobPreferences.technologies.docker",
     kubernetes: "jobPreferences.technologies.kubernetes",
     container: "jobPreferences.technologies.docker",
@@ -1010,20 +1229,16 @@
     python: "jobPreferences.technologies.python",
     java: "jobPreferences.technologies.java",
     commuting: "jobPreferences.commuteToLocation",
-    "bachelor's degree": "educationQuestions.bachelorsDegree",
-    "bachelor degree": "educationQuestions.bachelorsDegree",
+    "bachelor's degree": "educationAndInternships.hasBachelorsDegree",
+    "bachelor degree": "educationAndInternships.hasBachelorsDegree",
     "us clients": "jobPreferences.immediateJoiner",
     "join in 7 days": "jobPreferences.immediateJoiner",
     "start this job immediately": "jobPreferences.immediateJoiner",
     "start job immediately": "jobPreferences.immediateJoiner",
-    "start immediately": "jobPreferences.immediateJoiner",
     "start the job by office immediately": "jobPreferences.immediateJoiner",
-    salary: "jobPreferences.expectedSalary",
-    ctc: "jobPreferences.expectedSalary",
     lpa: "jobPreferences.expectedSalary",
     "per annum": "jobPreferences.expectedSalary",
     "expected salary": "jobPreferences.expectedSalary",
-    "expected ctc": "jobPreferences.expectedSalary",
     "are you okay with": "jobPreferences.expectedSalary",
     "are you comfortable with": "jobPreferences.expectedSalary",
     "are you willing to accept": "jobPreferences.expectedSalary",
@@ -1062,48 +1277,22 @@
     "comfortable with unpaid": "extraAndOptional.unpaidInternshipComfort",
     "comfortable with a 6-month unpaid":
       "extraAndOptional.unpaidInternshipComfort",
-    "rate your": "extraAndOptional.skillRatings",
-    "scale of 1 to 10": "extraAndOptional.skillRatings",
   };
 
-  function getAnswerFromPath(userData, path) {
-    if (!path || !userData) return null;
-
-    try {
-      const keys = path.split(".");
-      let current = userData;
-
-      for (const key of keys) {
-        if (current === null || current === undefined) {
-          return null;
-        }
-
-        // Handle array indices
-        if (key.match(/^\d+$/)) {
-          const index = parseInt(key, 10);
-          if (Array.isArray(current) && index < current.length) {
-            current = current[index];
-          } else {
-            return null;
-          }
-        } else {
-          current = current[key];
-        }
-
-        if (current === undefined) {
-          return null;
-        }
+  function getAnswerFromPath(userData: UserData, path: string): string {
+    const keys = path.split(".");
+    let value: any = userData;
+    for (const key of keys) {
+      if (value && typeof value === "object" && key in value) {
+        value = value[key];
+      } else {
+        return "";
       }
-
-      if (Array.isArray(current)) return current.join(", ");
-      return current;
-    } catch (error) {
-      log(`Error getting value from path ${path}: ${error.message}`);
-      return null;
     }
+    return value || "";
   }
 
-  async function closeSuccessModal() {
+  async function closeSuccessModal(): Promise<void> {
     log("Attempting to close success modal...");
 
     const closeButtonSelectors = [
@@ -1126,19 +1315,21 @@
         const buttons = Array.from(document.querySelectorAll(selector));
         const visibleButton = buttons.find(
           (btn) =>
-            btn.offsetParent !== null &&
-            !btn.disabled &&
-            (btn.offsetWidth > 0 || btn.offsetHeight > 0)
+            (btn as HTMLElement).offsetParent !== null &&
+            !(btn as HTMLButtonElement).disabled &&
+            ((btn as HTMLElement).offsetWidth > 0 ||
+              (btn as HTMLElement).offsetHeight > 0)
         );
 
         if (visibleButton) {
           log(`Clicking close button: ${selector}`);
-          visibleButton.click();
+          (visibleButton as HTMLElement).click();
           await delay(1000);
-          return true;
+          return;
         }
       } catch (e) {
-        log(`Error with selector ${selector}: ${e.message}`);
+        const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        log(`Error with selector ${selector}: ${errorMessage}`);
       }
     }
 
@@ -1154,36 +1345,35 @@
         const overlayEl = document.querySelector(overlay);
         if (overlayEl) {
           log(`Clicking overlay: ${overlay}`);
-          overlayEl.click();
+          (overlayEl as HTMLElement).click();
           await delay(1000);
-          return true;
+          return;
         }
       }
     } catch (e) {
-      log(`Error clicking overlay: ${e.message}`);
+      const errorMessage = e instanceof Error ? e.message : "Unknown error";
+      log(`Error clicking overlay: ${errorMessage}`);
     }
 
     log("Could not find a way to close the success modal");
-    return false;
   }
 
-  function calculateTotalExperience(workExperiences) {
+  function calculateTotalExperience(
+    workExperiences: Array<{ duration: string; [key: string]: any }>
+  ): number {
+    if (!workExperiences || workExperiences.length === 0) return 0;
     let totalMonths = 0;
-    const now = new Date();
     workExperiences.forEach((exp) => {
-      const startDate = new Date(exp.startDate);
-      const endDate =
-        exp.endDate.toLowerCase() === "present" ? now : new Date(exp.endDate);
-      let months =
-        (endDate.getFullYear() - startDate.getFullYear()) * 12 -
-        startDate.getMonth() +
-        endDate.getMonth();
-      totalMonths += months > 0 ? months : 0;
+      const duration = exp.duration || "";
+      const months = duration.match(/(\d+)\s*month/i);
+      const years = duration.match(/(\d+)\s*year/i);
+      if (months) totalMonths += parseInt(months[1]);
+      if (years) totalMonths += parseInt(years[1]) * 12;
     });
     return Math.round(totalMonths / 12);
   }
 
-  async function answerQuestionsOnPage(userData) {
+  async function answerQuestionsOnPage(userData: UserData): Promise<void> {
     log("Starting to answer questions on the current page...");
     const questionElements = document.querySelectorAll(".fb-dash-form-element");
     log(`Found ${questionElements.length} potential question elements.`);
@@ -1200,7 +1390,9 @@
         if (legend) {
           const legendSpan = legend.querySelector('span[aria-hidden="true"]');
           if (legendSpan) {
-            questionText = legendSpan.innerText.trim().toLowerCase();
+            questionText = (legendSpan as HTMLElement).innerText
+              .trim()
+              .toLowerCase();
           }
         }
       }
@@ -1215,11 +1407,15 @@
             label.querySelector(".fb-dash-form-element__label-title") ||
             label;
 
-          questionText = questionSpan.innerText.trim().toLowerCase();
+          questionText = (questionSpan as HTMLElement).innerText
+            .trim()
+            .toLowerCase();
 
           // If we still don't have text, try to find any visible text in the container
           if (!questionText) {
-            questionText = questionContainer.innerText.trim().toLowerCase();
+            questionText = (questionContainer as HTMLElement).innerText
+              .trim()
+              .toLowerCase();
           }
         }
       }
@@ -1243,13 +1439,12 @@
         (a, b) => b.length - a.length
       );
       for (const keyword of sortedKeywords) {
-        // Skip years keywords if question looks like skill yes/no
-        if (
-          (keyword === "how many years" || keyword === "years of experience") &&
-          /(?:experience|knowledge|proficiency|familiarity)\s+(?:with|of|in)/i.test(
-            questionText
-          )
-        ) {
+        // Distinguish between "Do you have experience with X?" (yes/no)
+        // and "How many years of experience do you have in X?" (numeric).
+        const isSkillYesNo = /(?:experience|knowledge|proficiency|familiarity)\s+(?:with|of|in)\s+\w+/.test(questionText);
+        const isYearsPrompt = /\bhow\s+many\s+years|\byears?\s+of\s+experience\b/.test(questionText);
+        if (isSkillYesNo && !isYearsPrompt) {
+          // Treat as yes/no skill question; skip years path
           continue;
         }
         if (questionText.includes(keyword)) {
@@ -1303,7 +1498,7 @@
           const userLocation =
             userData.personalInfo?.location?.toLowerCase() || "";
           const willingToRelocate =
-            userData.jobPreferences?.willingToRelocate === "Yes";
+            userData.jobPreferences?.willingToRelocate === true;
 
           if (questionText.includes("relocate") && willingToRelocate) {
             answer = "Yes";
@@ -1339,10 +1534,10 @@
           const techMatch = questionText.match(
             /\b(?:experience|proficiency|knowledge)\s+(?:with|in)\s+([a-zA-Z0-9\-\.\s]+)/i
           );
-          const technology = techMatch[1].trim().toLowerCase();
+          const technology = techMatch?.[1]?.trim().toLowerCase() || "";
 
           // Ensure we have safe access to user data
-          const userSkills = userData && userData.skills ? userData.skills : [];
+          const userSkills = userData && userData.skills ? userData.skills : {};
           const workExps =
             userData && userData.workExperiences
               ? userData.workExperiences
@@ -1352,21 +1547,29 @@
           let hasSkill = false;
           let answer = 0;
 
-          if (Array.isArray(userSkills)) {
-            const matchingSkill = userSkills.find(
+          if (typeof userSkills === "object") {
+            const matchingSkill = Object.keys(userSkills).find(
               (skill) =>
                 skill &&
                 ((typeof skill === "string" &&
                   skill.toLowerCase().includes(technology)) ||
                   (typeof skill === "object" &&
-                    skill.name &&
-                    skill.name.toLowerCase().includes(technology)))
+                    skill &&
+                    typeof skill === "object" &&
+                    "name" in skill &&
+                    (skill as any).name &&
+                    (skill as any).name.toLowerCase().includes(technology)))
             );
 
             if (matchingSkill) {
               hasSkill = true;
-              if (typeof matchingSkill === "object" && matchingSkill.years) {
-                answer = matchingSkill.years;
+              if (
+                typeof userSkills[matchingSkill] === "object" &&
+                userSkills[matchingSkill] &&
+                typeof userSkills[matchingSkill] === "object" &&
+                "years" in userSkills[matchingSkill]
+              ) {
+                answer = (userSkills[matchingSkill] as any).years;
               } else {
                 answer = 2; // Default to 2 years
               }
@@ -1383,15 +1586,20 @@
                 exp.description.toLowerCase().includes(technology)
               ) {
                 try {
-                  const startDate = new Date(exp.startDate);
+                  const startDate = exp.startDate
+                    ? new Date(exp.startDate)
+                    : new Date();
                   const endDate =
                     exp.endDate && exp.endDate.toLowerCase() === "present"
                       ? new Date()
-                      : new Date(exp.endDate);
+                      : exp.endDate
+                      ? new Date(exp.endDate)
+                      : new Date();
                   const years = Math.max(
                     0,
                     Math.round(
-                      (endDate - startDate) / (1000 * 60 * 60 * 24 * 365)
+                      (endDate.getTime() - startDate.getTime()) /
+                        (1000 * 60 * 60 * 24 * 365)
                     )
                   );
                   totalYears += years;
@@ -1495,8 +1703,15 @@
 
         if (isExperienceQuestion && !isYesNoQuestion) {
           const raw = userData.jobPreferences?.totalExperience ?? "3";
-          answer = String(Math.max(0, Math.min(99, Math.round(Number(raw)))));
-          log(`Experience question: ${answer} years`);
+          const skillName = questionText.match(
+            /\bhow many (?:whole )?years of (?:experience|exp)?\s+with\s+([a-zA-Z0-9\-\.\s]+)/i
+          );
+          if (skillName && skillName[1]) {
+            const skillRating =
+              userData.jobPreferences?.skillRatings?.[skillName[1]] || "5";
+            answer = String(Math.max(0, Math.min(99, Math.round(Number(raw)))));
+            log(`Experience question: ${answer} years`);
+          }
         }
 
         // Check if dropdown has Yes/No options
@@ -1505,8 +1720,8 @@
           selectElement &&
           Array.from(selectElement.options).some(
             (opt) =>
-              opt.textContent.trim().toLowerCase() === "yes" ||
-              opt.textContent.trim().toLowerCase() === "no"
+              (opt.textContent?.trim().toLowerCase() || "") === "yes" ||
+              (opt.textContent?.trim().toLowerCase() || "") === "no"
           );
 
         if (isYesNoQuestion || hasYesNoOptions) {
@@ -1516,12 +1731,12 @@
           if (skillPart) {
             skillPart = skillPart.replace("?", "").trim();
             const mentionedSkills = skillPart.split(
-              /\s*\/\s*|\s+or\s+|\s*,\s+|\s*,\s*/
+              /\s*\/\s*|\s+or\s+|\s*,\s+/
             );
             let foundSkill = false;
-            const userSkills = Object.keys(userData.skills).sort(
-              (a, b) => b.length - a.length
-            );
+            const userSkills = userData.skills
+              ? Object.keys(userData.skills).sort((a, b) => b.length - a.length)
+              : [];
 
             for (const s of mentionedSkills) {
               const cleanSkill = s.trim().toLowerCase();
@@ -1529,8 +1744,8 @@
                 userSkill.toLowerCase().includes(cleanSkill)
               );
               if (matchingUserSkill) {
-                const exp = parseInt(userData.skills[matchingUserSkill], 10);
-                if (exp > 0) foundSkill = true;
+                const exp = userData.skills?.[matchingUserSkill];
+                if (exp && exp > 0) foundSkill = true;
                 break;
               }
             }
@@ -1546,14 +1761,12 @@
             questionText.split(" with ")[1];
           if (skillPart) {
             skillPart = skillPart.replace("?", "").trim();
-            const mentionedSkills = skillPart.split(
-              /\s*\/\s*|\s+or\s+|\s*,\s+/
-            );
+            const mentionedSkills = skillPart.split(/\s*\/\s*|\s+or\s+/);
             let maxExp = 0;
             let foundSkill = false;
-            const userSkills = Object.keys(userData.skills).sort(
-              (a, b) => b.length - a.length
-            );
+            const userSkills = userData.skills
+              ? Object.keys(userData.skills).sort((a, b) => b.length - a.length)
+              : [];
 
             for (const s of mentionedSkills) {
               const cleanSkill = s.trim().toLowerCase();
@@ -1561,8 +1774,8 @@
                 userSkill.toLowerCase().includes(cleanSkill)
               );
               if (matchingUserSkill) {
-                const exp = parseInt(userData?.skills[matchingUserSkill], 10);
-                if (exp > maxExp) maxExp = exp;
+                const exp = userData.skills?.[matchingUserSkill];
+                if (exp && exp > maxExp) maxExp = exp;
                 foundSkill = true;
               }
             }
@@ -1574,14 +1787,17 @@
           }
         }
       } else if (dataPath === "extraAndOptional.skillRatings") {
-        const skillKeys = Object.keys(
-          userData?.extraAndOptional?.skillRatings
-        ).sort((a, b) => b.length - a.length);
+        const skillKeys = userData?.extraAndOptional?.skillRatings
+          ? Object.keys(userData.extraAndOptional.skillRatings).sort(
+              (a, b) => b.length - a.length
+            )
+          : [];
         const foundSkillKey = skillKeys.find((skillKey) =>
           questionText.includes(skillKey.toLowerCase())
         );
         if (foundSkillKey) {
-          answer = userData.extraAndOptional.skillRatings[foundSkillKey];
+          answer =
+            userData.extraAndOptional.skillRatings?.[foundSkillKey] || "";
         }
       } else {
         answer = getAnswerFromPath(userData, dataPath);
@@ -1591,10 +1807,10 @@
         questionText.includes("bachelor") ||
         questionText.includes("degree")
       ) {
-        const hasBachelor = userData.education?.some((edu) =>
-          edu.degree?.toLowerCase().includes("bachelor")
+        const educationKeywords = (userData.education as any)?.some(
+          (edu: any) => edu.degree?.toLowerCase().includes("bachelor")
         );
-        answer = hasBachelor ? "Yes" : "No";
+        answer = educationKeywords ? "Yes" : "No";
         log(`Derived answer for degree question: "${answer}"`);
       }
 
@@ -1635,9 +1851,9 @@
         if (!isPersonalInfoQuestion) {
           const selectElement = questionContainer.querySelector("select");
           if (selectElement) {
-            const options = Array.from(selectElement.options).map((opt) =>
-              opt.textContent.trim().toLowerCase()
-            );
+            const options = Array.from(
+              (selectElement as HTMLSelectElement).options
+            ).map((opt) => opt.textContent?.trim().toLowerCase() || "");
             const hasYesNo = options.includes("yes") && options.includes("no");
 
             if (hasYesNo) {
@@ -1704,7 +1920,7 @@
         // First check for radio buttons
         const radioButtons = questionContainer.querySelectorAll(
           'input[type="radio"]'
-        );
+        ) as NodeListOf<HTMLInputElement>;
         if (radioButtons.length > 0) {
           log(`Found ${radioButtons.length} radio buttons for question`);
           const radioToSelect = Array.from(radioButtons).find((radio) => {
@@ -1728,10 +1944,10 @@
               !labelText &&
               radio.getAttribute("data-test-text-selectable-option__input")
             ) {
-              labelText = radio
-                .getAttribute("data-test-text-selectable-option__input")
-                .trim()
-                .toLowerCase();
+              const attrValue = radio.getAttribute(
+                "data-test-text-selectable-option__input"
+              );
+              labelText = attrValue ? attrValue.trim().toLowerCase() : "";
             }
 
             // Normalize the answer text
@@ -1796,17 +2012,19 @@
         }
         // Then check for dropdowns/select elements
         else {
-          const selectElement = questionContainer.querySelector("select");
+          const selectElement = questionContainer.querySelector(
+            "select"
+          ) as HTMLSelectElement;
           if (selectElement) {
             log(`Found dropdown for question`);
-            await simulateUserInput(selectElement, answer);
+            await simulateUserInput(selectElement, String(answer));
           } else {
             const inputElement = questionContainer.querySelector(
               'input:not([type="radio"]), textarea'
-            );
+            ) as HTMLInputElement | HTMLTextAreaElement | null;
             if (inputElement) {
               log(`Simulating input for found element...`);
-              await simulateUserInput(inputElement, answer);
+              await simulateUserInput(inputElement, String(answer));
             } else {
               log(
                 `Could not find any input field for question: "${questionText}"`
@@ -1815,19 +2033,85 @@
           }
         }
       } catch (error) {
-        log(`Error processing question "${questionText}": ${error.message}`);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        log(`Error processing question "${questionText}": ${errorMessage}`);
       }
     }
     await delay(200);
     log("Finished answering questions on this page.");
   }
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "processJobApplication") {
-      processJobApplication()
-        .then(() => sendResponse({ success: true }))
-        .catch((e) => sendResponse({ success: false, error: e.message }));
-      return true; // async
+  chrome.runtime.onMessage.addListener(
+    (
+      request: any,
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response: any) => void
+    ) => {
+      if (request.action === "startApply" || request.action === "startBatchApply") {
+        if (isApplying) {
+          log("Application already in progress.");
+          sendResponse({
+            success: false,
+            message: "Application already in progress.",
+          });
+          return;
+        }
+
+        const userData = (window as any).loadUserData();
+        log("Received startApply message. Beginning process.");
+
+        processApplication().finally(() => {
+          isApplying = false;
+          log("Application process has concluded.");
+        });
+
+        sendResponse({ success: true });
+        return true; // keep channel open for this async response
+      }
+
+      // Handle messages from BatchApply.js
+      if (request.action === "processJobApplication") {
+        if (isApplying) {
+          log("Application already in progress.");
+          chrome.runtime.sendMessage({
+            action: "applicationComplete",
+            success: false,
+            error: "Already applying",
+          });
+          return; // no async work, so no return true
+        }
+
+        isApplying = true;
+        log("Starting job application process from BatchApply.js...");
+
+        // Immediately acknowledge the message so the sender's port can close without errors
+        sendResponse({ success: true });
+
+        processApplication()
+          .then(() => {
+            isApplying = false;
+            log("Application completed successfully");
+            chrome.runtime.sendMessage({
+              action: "applicationComplete",
+              success: true,
+            });
+          })
+          .catch((error) => {
+            isApplying = false;
+            const errorMessage =
+              error instanceof Error ? error.message : "Unknown error";
+            log(`Application failed: ${errorMessage}`);
+            chrome.runtime.sendMessage({
+              action: "applicationComplete",
+              success: false,
+              error: errorMessage,
+            });
+          });
+
+        return true; // keep channel open for this async response
+      }
+      return;
     }
-  });
+  );
 })();

@@ -1,0 +1,18 @@
+{
+  "name": "linkedin-easy-apply-extension",
+  "version": "1.0.0",
+  "description": "LinkedIn Auto Apply Chrome Extension",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.0.0"
+  },
+  "keywords": ["chrome-extension", "linkedin", "automation"],
+  "author": "",
+  "license": "MIT"
+}
